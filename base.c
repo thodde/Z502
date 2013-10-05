@@ -123,6 +123,16 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         }
     do_print--;
     }
+
+    if (strcmp(call_names[call_type], "get_time") == 0) {
+        //TODO validate parameters
+        if ((SystemCallData->NumberOfArguments - 1) < 1) {
+            //TODO throw error
+        }
+        else {
+            //TODO execute the read from Z502Clock (Memory IO) listed on Start_HERE.ppt slide 9
+        }
+    }
 }                                               // End of svc
 
 
@@ -158,6 +168,8 @@ void    osInit( int argc, char *argv[]  ) {
         Z502MakeContext( &next_context, (void *)sample_code, KERNEL_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
     }                   /* This routine should never return!!           */
+
+    printf("I called this program: %s", argv[1]);
 
     /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
