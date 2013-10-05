@@ -27,7 +27,6 @@
 #include             "protos.h"
 #include             "string.h"
 
-#include	     	 "my_globals.h"
 
 // These loacations are global and define information about the page table
 extern UINT16        *Z502_PAGE_TBL_ADDR;
@@ -41,9 +40,6 @@ char                 *call_names[] = { "mem_read ", "mem_write",
                             "suspend  ", "resume   ", "ch_prior ",
                             "send     ", "receive  ", "disk_read",
                             "disk_wrt ", "def_sh_ar" };
-
-int 	             gen_pid = 0;            // used for generating a process id
-PCB_str	             *current_PCB = NULL;    // this is running PCB
 
 
 /************************************************************************
@@ -114,7 +110,6 @@ void    fault_handler( void )
 void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     short               call_type;
     static short        do_print = 10;
-	INT32				Time;
     short               i;
 
     call_type = (short)SystemCallData->SystemCallNumber;
@@ -126,26 +121,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
              (unsigned long )SystemCallData->Argument[i],
              (unsigned long )SystemCallData->Argument[i]);
         }
-    	do_print--;
-    }
-
-    switch (call_type) {
-		//get the time system call
-        case SYSNUM_GET_TIME_OF_DAY:
-			MEM_READ ( Z502ClockStatus, &Time );
-			*(INT32*)SystemCallData->Argument[0] = Time;
-			break;
-		//terminate system call
-		case SYSNUM_TERMINATE_PROCESS:
-			Z502Halt();
-			break;
-        case SYSNUM_SLEEP:
-            break;
-		default:
-			printf( "ERROR! call_type not recognized!\n" );
-			printf( "Call_type is %i\n", call_type );
+    do_print--;
     }
 }                                               // End of svc
+
 
 
 /************************************************************************
@@ -176,74 +155,12 @@ void    osInit( int argc, char *argv[]  ) {
     /*  Determine if the switch was set, and if so go to demo routine.  */
 
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
-        CALL ( Z502MakeContext( &next_context, (void *)sample_code, KERNEL_MODE ) );
-		printf("1. HEREEEEEE");
-        CALL ( Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context ) );
-		printf("2. HEREEEEEE");
+        Z502MakeContext( &next_context, (void *)sample_code, KERNEL_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
     }                   /* This routine should never return!!           */
-		/*  This should be done by a "os_make_process" routine, so that
+
+    /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
-	else if(( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
-		Z502MakeContext( &next_context, (void *)test0, USER_MODE );
-		Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
-		CALL ( os_create_process(&i, "test0", test0, &i) );
-	}
+    Z502MakeContext( &next_context, (void *)test0, USER_MODE );
+    Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
 }                                               // End of osInit
-
-/************************************************************************
-    os_create_process:
-
-    This function creates processes. When it creates a parent process,
-    it will directly make it run. Child processes will not run, but instead be 
-    put into the ready queue.
-
-    Parameters:
-        INT32* pid:        the unique process ID
-        char*  name:       the unique name of the process
-        void*  prog_addr:  the pointer used for creating contexts
-        INT32* error:      address of return error
-*************************************************************************/
-INT32 os_create_process(INT32* pid, char* name, void* prog_addr, INT32* error) {
-	PCB_str *PCB = (PCB_str *)(malloc(sizeof(PCB_str)));    //allocate memory for PCB
-       
-	PCB->p_time = 0;                                        //now is zero
-	PCB->p_id = gen_pid;                                    //assign pid
-    gen_pid++;
-	PCB->p_state=CREATE;
-
-	memset(PCB->p_name, 0, MAX_NAME+1);                    //assign process name
-	strcpy(PCB->p_name,name);                              //enter name 
-    PCB->disk_io.flag=0;                                   //assign disk read flag
-    memset(PCB->pagetable, 0, VIRTUAL_MEM_PGS+1);          //pagetable 
-
-	if (current_PCB != NULL) {
-        PCB->p_parent = current_PCB->p_id;                //assign parent id
-	}
-    else {
-        PCB->p_parent = -1;                               //-1 means this process is the parent process
-	}
-
-	(*error) = ERR_SUCCESS;                           //return error value
-	(*pid) = PCB->p_id;                               //return pid
-
-	return 0; 
-}
-
-/************************************************************************
-	context operations:
-
-	There are two functions: make_context and switch_context for a PCB.
-	switch_context makes this PCB run on the current_PCB
-
-	These functions use Z502MAKECONTEXT and Z502SWITCHCONTEXT
-
-*************************************************************************/
-void make_context ( PCB_str * PCB, void *procPTR ){
-	ZCALL( Z502MakeContect( &PCB->context, procPTR, USER_MODE ));
-}
-
-void switch_context ( PCB_str * PCB ){
-	current_PCB = PCB;
-    current_PCB -> p_state =RUN;      //update the PCB state to RUN
-	ZCALL( Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &current_PCB->context ));
-}

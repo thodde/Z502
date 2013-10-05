@@ -29,8 +29,8 @@
 
 #define         CURRENT_REL                     "4.00"
 //#define         NT
-#define        LINUX
-// #define           MAC
+//#define        LINUX
+#define           MAC
 
         /*      These are Portability enhancements              */
 
