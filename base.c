@@ -37,6 +37,9 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 
 extern void          *TO_VECTOR [];
 
+//TODO destroy this later or make it a better implementation
+void * base_process;
+
 char                 *call_names[] = { "mem_read ", "mem_write",
                             "read_mod ", "get_time ", "sleep    ",
                             "get_pid  ", "create   ", "term_proc",
@@ -127,14 +130,27 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         do_print--;
     }
 
-
     if (Z502_MODE == KERNEL_MODE) {
+        printf("Confirmed, I am in kernel mode\n");
         if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
-            printf("This is the data I received: %li\n", *(SystemCallData->Argument[0]));
+            //printf("This is the data I received: %li\n", *(SystemCallData->Argument[0]));
             MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
+        }
+        //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
+        else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
+            printf("I get here?");
+            //TODO validate parameters
+            //Z502DestroyContext(base_process);  I think this is used when killing any other process other than the base process
+
+            //TODO this should only be called when the parent process is killed, not when any process is killed
+            Z502Halt();
+
+            //TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
+            //printf("Returned with error: %i\n", SystemCallData->Argument[1]);
         }
     }
     else if (Z502_MODE == USER_MODE) {
+        printf("Confirmed, I am in user mode\n");
         if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
             //TODO validate parameters
             if ((SystemCallData->NumberOfArguments - 1) < 1) {
@@ -145,10 +161,15 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 GET_TIME_OF_DAY(SystemCallData->Argument[0]);
             }
         }
-        else if (strcmp(call_names[call_type], "term_proc") == 0) {  // handles TERMINATE_PROCESS
-            //TODO implement
+        else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
+            printf("I get here?");
+            //TODO validate parameters
+            TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
+            printf("Returned with error: %i\n", SystemCallData->Argument[1]);
         }
 
+    } else {
+        printf("Error!  Current mode is unrecognized!!!\n");
     }
 }                                               // End of svc
 
@@ -188,7 +209,9 @@ void    osInit( int argc, char *argv[]  ) {
     else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
-        Z502MakeContext( &next_context, (void *)test0, USER_MODE );
-        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
+        Z502MakeContext( &base_process, (void *)test0, USER_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
+//        Z502MakeContext( &next_context, (void *)test0, USER_MODE );
+//        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
     }
 }                                               // End of osInit
