@@ -121,8 +121,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
              (unsigned long )SystemCallData->Argument[i],
              (unsigned long )SystemCallData->Argument[i]);
         }
-    do_print--;
+        do_print--;
     }
+
+    
 }                                               // End of svc
 
 
@@ -158,9 +160,10 @@ void    osInit( int argc, char *argv[]  ) {
         Z502MakeContext( &next_context, (void *)sample_code, KERNEL_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
     }                   /* This routine should never return!!           */
-
-    /*  This should be done by a "os_make_process" routine, so that
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
-    Z502MakeContext( &next_context, (void *)test0, USER_MODE );
-    Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
+        Z502MakeContext( &next_context, (void *)test0, USER_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
+    }
 }                                               // End of osInit
