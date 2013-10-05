@@ -28,6 +28,9 @@
 #include             "string.h"
 
 
+
+extern INT16 Z502_MODE;
+
 // These loacations are global and define information about the page table
 extern UINT16        *Z502_PAGE_TBL_ADDR;
 extern INT16         Z502_PAGE_TBL_LENGTH;
@@ -125,17 +128,27 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     }
 
 
-    if (strcmp(call_names[call_type], "get_time") == 0) { // handles GET_TIME_OF_DAY
-        //TODO validate parameters
-        if ((SystemCallData->NumberOfArguments - 1) < 1) {
-            //TODO throw error
-        }
-        else {
-            //TODO execute the read from Z502Clock (Memory IO) listed on Start_HERE.ppt slide 9
+    if (Z502_MODE == KERNEL_MODE) {
+        if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
+            printf("This is the data I received: %li\n", *(SystemCallData->Argument[0]));
+            MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
         }
     }
-    else if (strcmp(call_names[call_type], "term_proc") == 0) {  // handles TERMINATE_PROCESS
-        //TODO implement
+    else if (Z502_MODE == USER_MODE) {
+        if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
+            //TODO validate parameters
+            if ((SystemCallData->NumberOfArguments - 1) < 1) {
+                //TODO throw error
+            }
+            else {
+            // Need to validate that the the supplied memory block resides in context space
+                GET_TIME_OF_DAY(SystemCallData->Argument[0]);
+            }
+        }
+        else if (strcmp(call_names[call_type], "term_proc") == 0) {  // handles TERMINATE_PROCESS
+            //TODO implement
+        }
+
     }
 }                                               // End of svc
 
