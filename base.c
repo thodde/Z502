@@ -124,8 +124,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         do_print--;
     }
 
-<<<<<<< HEAD
-    if (strcmp(call_names[call_type], "get_time") == 0) {
+
+    if (strcmp(call_names[call_type], "get_time") == 0) { // handles GET_TIME_OF_DAY
         //TODO validate parameters
         if ((SystemCallData->NumberOfArguments - 1) < 1) {
             //TODO throw error
@@ -134,9 +134,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             //TODO execute the read from Z502Clock (Memory IO) listed on Start_HERE.ppt slide 9
         }
     }
-=======
-    
->>>>>>> b703b083405d18228eac97315f70e5b9e70aeb08
+    else if (strcmp(call_names[call_type], "term_proc") == 0) {  // handles TERMINATE_PROCESS
+        //TODO implement
+    }
 }                                               // End of svc
 
 
