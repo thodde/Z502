@@ -117,6 +117,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     short               call_type;
     static short        do_print = 10;
     short               i;
+    INT32              current_time;
+    INT32              sleep_time;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -138,7 +140,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         }
         //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
         else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
-            printf("I get here?");
             //TODO validate parameters
             //Z502DestroyContext(base_process);  I think this is used when killing any other process other than the base process
 
@@ -147,6 +148,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             //TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
             //printf("Returned with error: %i\n", SystemCallData->Argument[1]);
+        }
+        else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
+            MEM_READ( Z502TimerStatus, &current_time);
+            sleep_time = SystemCallData->Argument[0];
         }
     }
     else if (Z502_MODE == USER_MODE) {
@@ -162,13 +167,18 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
         }
         else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
-            printf("I get here?");
+            printf("I get here?\n");
             //TODO validate parameters
             TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
             printf("Returned with error: %i\n", SystemCallData->Argument[1]);
         }
+        else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
+            MEM_READ( Z502TimerStatus, &current_time);
+            sleep_time = SystemCallData->Argument[0];
+        }
 
-    } else {
+    }
+    else {
         printf("Error!  Current mode is unrecognized!!!\n");
     }
 }                                               // End of svc
@@ -211,7 +221,15 @@ void    osInit( int argc, char *argv[]  ) {
         test0 runs on a process recognized by the operating system.    */
         Z502MakeContext( &base_process, (void *)test0, USER_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
-//        Z502MakeContext( &next_context, (void *)test0, USER_MODE );
-//        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
+    }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1a runs on a process recognized by the operating system.    */
+        Z502MakeContext( &base_process, (void *)test1a, USER_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
     }
 }                                               // End of osInit
+
+void os_make_process() {
+
+}
