@@ -30,21 +30,21 @@ typedef         struct{
 }DISK_IO_str;
 
 //PCB structure
-typedef         struct {
-	char					p_name[MAX_NAME+1];      //name
-	INT32					p_id;                    //process id
-        INT32					p_time;                  //wake up time
-	INT32					p_parent;                // parent control
-        INT32                                   p_state;                 //state
-	void					*context; 
-	void				        *next;                    //link to next node
-	void                                    *sentBox;                 //to sent queue
-        void                                    *recvBox;                 // for recieve 
-        INT32					msg_count;
+typedef struct {
+	char		p_name[MAX_NAME+1];      //name
+	INT32	    p_id;                    //process id
+    INT32		p_time;                  //wake up time
+	INT32		p_parent;                // parent control
+    INT32       p_state;                 //state
+	void	    *context;
+	void		*next;                    //link to next node
+	void        *sentBox;                 //to sent queue
+    void        *recvBox;                 // for recieve
+    INT32		msg_count;
       
-        UINT16					pagetable[VIRTUAL_MEM_PGS]; //page table 
-        DISK_IO_str                             disk_io;                    //disk use information
+    INT16		 pagetable[VIRTUAL_MEM_PGS]; //page table
+    DISK_IO_str  disk_io;                    //disk use information
 }PCB_str;
 
 //******** Function Prototypes *********//
-INT32 OS_Create_Process(INT32* pid, char* name, void* prog_addr, INT32* error);
+INT32 os_make_process(INT32* pid, char* name, void* prog_addr, INT32* error);

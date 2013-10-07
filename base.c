@@ -40,6 +40,8 @@ extern void          *TO_VECTOR [];
 //TODO destroy this later or make it a better implementation
 void * base_process;
 
+bool interrupt_lock = TRUE;
+
 char                 *call_names[] = { "mem_read ", "mem_write",
                             "read_mod ", "get_time ", "sleep    ",
                             "get_pid  ", "create   ", "term_proc",
@@ -57,6 +59,7 @@ void    interrupt_handler( void ) {
     INT32              device_id;
     INT32              status;
     INT32              Index = 0;
+    INT32              Time;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -67,6 +70,8 @@ void    interrupt_handler( void ) {
 
     switch(device_id) {
         case(TIMER_INTERRUPT):
+            MEM_READ(Z502ClockStatus, &Time);
+            interrupt_lock = FALSE;
             break;
     }
 
@@ -147,6 +152,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
             sleep_time = SystemCallData->Argument[0];
+            Z502Idle();
         }
     }
     else if (Z502_MODE == USER_MODE) {
@@ -170,6 +176,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
             sleep_time = SystemCallData->Argument[0];
+            Z502Idle();
         }
 
     }
@@ -225,6 +232,6 @@ void    osInit( int argc, char *argv[]  ) {
     }
 }                                               // End of osInit
 
-void os_make_process() {
+INT32 os_make_process(INT32* pid, char* name, void* prog_addr, INT32* error) {
 
 }
