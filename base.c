@@ -42,12 +42,12 @@ void * base_process;
 
 BOOL interrupt_lock = TRUE;
 
-char                 *call_names[] = { "mem_read ", "mem_write",
-                            "read_mod ", "get_time ", "sleep    ",
-                            "get_pid  ", "create   ", "term_proc",
-                            "suspend  ", "resume   ", "ch_prior ",
-                            "send     ", "receive  ", "disk_read",
-                            "disk_wrt ", "def_sh_ar" };
+char *call_names[] = { "mem_read ", "mem_write",
+                       "read_mod ", "get_time ", "sleep    ",
+                       "get_pid  ", "create   ", "term_proc",
+                       "suspend  ", "resume   ", "ch_prior ",
+                       "send     ", "receive  ", "disk_read",
+                       "disk_wrt ", "def_sh_ar" };
 
 
 /************************************************************************
@@ -133,7 +133,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     }
 
     if (Z502_MODE == KERNEL_MODE) {
-        printf("Confirmed, I am in kernel mode\n");
+        printf("I am in kernel mode\n");
         if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
             //printf("This is the data I received: %li\n", *(SystemCallData->Argument[0]));
             MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
@@ -156,7 +156,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         }
     }
     else if (Z502_MODE == USER_MODE) {
-        printf("Confirmed, I am in user mode\n");
+        printf("I am in user mode\n");
         if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
             //TODO validate parameters
             if ((SystemCallData->NumberOfArguments - 1) < 1) {
