@@ -211,7 +211,5 @@ void    osInit( int argc, char *argv[]  ) {
         test0 runs on a process recognized by the operating system.    */
         Z502MakeContext( &base_process, (void *)test0, USER_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
-//        Z502MakeContext( &next_context, (void *)test0, USER_MODE );
-//        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &next_context );
     }
 }                                               // End of osInit
