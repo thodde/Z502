@@ -31,7 +31,7 @@
 
 extern INT16 Z502_MODE;
 
-// These loacations are global and define information about the page table
+// These locations are global and define information about the page table
 extern UINT16        *Z502_PAGE_TBL_ADDR;
 extern INT16         Z502_PAGE_TBL_LENGTH;
 
@@ -39,6 +39,8 @@ extern void          *TO_VECTOR [];
 
 //TODO destroy this later or make it a better implementation
 void * base_process;
+
+BOOL interrupt_lock = TRUE;
 
 char                 *call_names[] = { "mem_read ", "mem_write",
                             "read_mod ", "get_time ", "sleep    ",
@@ -57,8 +59,7 @@ void    interrupt_handler( void ) {
     INT32              device_id;
     INT32              status;
     INT32              Index = 0;
-    static BOOL        remove_this_in_your_code = TRUE;   /** TEMP **/
-    static INT32       how_many_interrupt_entries = 0;    /** TEMP **/
+    INT32              Time;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -67,12 +68,11 @@ void    interrupt_handler( void ) {
     // Now read the status of this device
     MEM_READ(Z502InterruptStatus, &status );
 
-    /** REMOVE THE NEXT SIX LINES **/
-    how_many_interrupt_entries++;                         /** TEMP **/
-    if ( remove_this_in_your_code && ( how_many_interrupt_entries < 20 ) )
-        {
-        printf( "Interrupt_handler: Found device ID %d with status %d\n",
-                        device_id, status );
+    switch(device_id) {
+        case(TIMER_INTERRUPT):
+            MEM_READ(Z502ClockStatus, &Time);
+            interrupt_lock = FALSE;
+            break;
     }
 
     // Clear out this device - we're done with it
@@ -117,6 +117,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     short               call_type;
     static short        do_print = 10;
     short               i;
+    INT32              current_time;
+    INT32              sleep_time;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -138,7 +140,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         }
         //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
         else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
-            printf("I get here?");
             //TODO validate parameters
             //Z502DestroyContext(base_process);  I think this is used when killing any other process other than the base process
 
@@ -147,6 +148,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             //TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
             //printf("Returned with error: %i\n", SystemCallData->Argument[1]);
+        }
+        else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
+            MEM_READ( Z502TimerStatus, &current_time);
+            sleep_time = SystemCallData->Argument[0];
+            Z502Idle();
         }
     }
     else if (Z502_MODE == USER_MODE) {
@@ -162,13 +168,18 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
         }
         else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
-            printf("I get here?");
             //TODO validate parameters
             TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
             printf("Returned with error: %i\n", SystemCallData->Argument[1]);
         }
+        else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
+            MEM_READ( Z502TimerStatus, &current_time);
+            sleep_time = SystemCallData->Argument[0];
+            Z502Idle();
+        }
 
-    } else {
+    }
+    else {
         printf("Error!  Current mode is unrecognized!!!\n");
     }
 }                                               // End of svc
@@ -212,4 +223,14 @@ void    osInit( int argc, char *argv[]  ) {
         Z502MakeContext( &base_process, (void *)test0, USER_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
     }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1a runs on a process recognized by the operating system.    */
+        Z502MakeContext( &base_process, (void *)test1a, USER_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
+    }
 }                                               // End of osInit
+
+INT32 os_make_process(INT32* pid, char* name, void* prog_addr, INT32* error) {
+
+}
