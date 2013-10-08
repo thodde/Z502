@@ -32,7 +32,7 @@ typedef struct {
 	void        *sentBox;                 //to sent queue
     void        *recvBox;                 // for recieve
     INT32		msg_count;
-      
+
     INT16		pagetable[VIRTUAL_MEM_PGS]; //page table
 }PCB_str;
 
