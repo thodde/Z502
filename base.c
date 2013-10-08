@@ -26,7 +26,7 @@
 #include             "syscalls.h"
 #include             "protos.h"
 #include             "string.h"
-
+#include             "my_globals.h"
 
 
 extern INT16 Z502_MODE;
@@ -40,7 +40,15 @@ extern void          *TO_VECTOR [];
 //TODO destroy this later or make it a better implementation
 void * base_process;
 
-bool interrupt_lock = TRUE;
+// for keeping track of the current pid
+int gen_pid = 0;
+PCB_str	               *current_PCB = NULL;    // this is the currently running PCB
+
+PCB_str		           *timerList = NULL;      //first node in the timer queue
+PCB_str                *timer_tail = NULL;     //timer queue tail
+int	                   total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
+
+BOOL interrupt_lock = TRUE;
 
 char                 *call_names[] = { "mem_read ", "mem_write",
                             "read_mod ", "get_time ", "sleep    ",
@@ -48,7 +56,6 @@ char                 *call_names[] = { "mem_read ", "mem_write",
                             "suspend  ", "resume   ", "ch_prior ",
                             "send     ", "receive  ", "disk_read",
                             "disk_wrt ", "def_sh_ar" };
-
 
 /************************************************************************
     INTERRUPT_HANDLER
@@ -78,6 +85,7 @@ void    interrupt_handler( void ) {
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
 }                                       /* End of interrupt_handler */
+
 /************************************************************************
     FAULT_HANDLER
         The beginning of the OS502.  Used to receive hardware faults.
@@ -117,8 +125,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     short               call_type;
     static short        do_print = 10;
     short               i;
-    INT32              current_time;
-    INT32              sleep_time;
+    INT32               current_time;
+    INT32               sleep_time;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -152,6 +160,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
             sleep_time = SystemCallData->Argument[0];
+            //current_PCB->p_time = (current_time+sleep_time);
+            //add_to_timer_queue(current_PCB);
             Z502Idle();
         }
     }
@@ -176,9 +186,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
             sleep_time = SystemCallData->Argument[0];
+            //current_PCB->p_time = (current_time+sleep_time);
+            //add_to_timer_queue(current_PCB);
             Z502Idle();
         }
-
     }
     else {
         printf("Error!  Current mode is unrecognized!!!\n");
@@ -227,11 +238,106 @@ void    osInit( int argc, char *argv[]  ) {
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1a runs on a process recognized by the operating system.    */
+        //os_make_process( &i, "test1a", &i);
         Z502MakeContext( &base_process, (void *)test1a, USER_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
     }
 }                                               // End of osInit
 
-INT32 os_make_process(INT32* pid, char* name, void* prog_addr, INT32* error) {
+INT32 os_make_process(INT32* pid, char* name, INT32* error) {
+    PCB_str *PCB = (PCB_str *)(malloc(sizeof(PCB_str)));    // allocate memory for PCB
 
+    PCB->p_time = 0;                                        // start time = now (zero)
+    PCB->p_id = gen_pid;                                    // assign pid
+    gen_pid++;
+    PCB->p_state=CREATE;
+
+    memset(PCB->p_name, 0, MAX_NAME+1);                    // assign process name
+    strcpy(PCB->p_name, name);                             // assign process name
+
+    if (current_PCB != NULL)
+        PCB->p_parent = current_PCB->p_id;                // assign parent id
+    else
+        PCB->p_parent = -1;                               // -1 means this process is the parent process
+
+    (*error) = ERR_SUCCESS;                           // return error value
+    (*pid) = PCB->p_id;                               // return pid
+
+    make_context(PCB, base_process);
+    //TODO: add PCB to ready queue here
+
+    return 0;
+}
+
+/*********************************************************
+ * Creates a context for the current PCB
+**********************************************************/
+void make_context( PCB_str* PCB, void* procPTR ) {
+	Z502MakeContext( &PCB->context, procPTR, USER_MODE );
+}
+
+/*********************************************************
+ * Switches contexts for the current PCB
+**********************************************************/
+void switch_context( PCB_str* PCB ) {
+	current_PCB = PCB;
+    current_PCB -> p_state = RUN;      //update the PCB state to RUN
+	Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &current_PCB->context );
+}
+
+/************************************************************************
+   add to timer queue:
+        sort nodes based on wake up time (p_time in PCB);
+        inputs are all PCB_str * entry
+*************************************************************************/
+INT32 add_to_timer_queue(PCB_str * entry) {
+    PCB_str** ptrFirst= &timerList;                        // pointer to the timer queue head
+    PCB_str*  PCB = (PCB_str*) (malloc(sizeof(PCB_str)));  // create memory for PCB
+    memcpy(PCB, entry, sizeof(PCB_str));                   // copy new PCB to this memory space
+    PCB_str* current = NULL;
+    PCB_str* previous = NULL;
+
+    entry->p_state = SLEEPING;                              //update state to sleep
+
+    int flag = 0;
+
+	// First one in the queue
+	if ( *ptrFirst  == NULL) {
+	    (*ptrFirst) = entry;
+		timer_tail = entry;
+        total_timer_pid++;
+	}
+	else {      // NOT the first PCB in the queue
+        current = (*ptrFirst);
+
+        while(current != NULL) {
+            if(entry->p_time < current->p_time) {
+                if(current == (*ptrFirst)) {
+                    (*ptrFirst) = entry;
+                    entry->next = current;
+                    total_timer_pid++;
+                    flag = 1;
+                    break;
+                }
+                else {
+                    previous->next = entry;
+                    entry->next = current;
+                    total_timer_pid++;
+                    flag = 1;
+                    break;
+                }
+            }
+            else {
+                previous = current;
+                current = current->next;
+            }
+        }
+
+        if(flag == 0) {
+            timer_tail->next = entry;
+            timer_tail = entry;
+            total_timer_pid++;
+        }
+    }
+	return -1;
 }
