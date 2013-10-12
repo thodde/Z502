@@ -26,7 +26,7 @@
 
 typedef struct {
     INT32   pid;
-    int     delay;
+    INT32   delay;
     char    name[MAX_NAME];
     INT32   parent;
     INT32   state;

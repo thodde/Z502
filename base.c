@@ -275,10 +275,7 @@ void start_timer() {
 
     add_to_list(timer_queue, current_PCB);
     MEM_WRITE(Z502TimerStart, &current_PCB->delay);
-    MEM_READ(Z502InterruptDevice, &status);
-    printf("Current status of device: %i\n", status);
-    Z502Idle();
-    MEM_READ(Z502InterruptDevice, &status);
-    //MEM_READ(Z502TimerStatus, &status);
+    MEM_READ(Z502TimerStatus, &status);
     printf("Current status is: %i\n", status);
+    Z502Idle();
 }
