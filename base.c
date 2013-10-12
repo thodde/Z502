@@ -42,11 +42,11 @@ void * base_process;
 
 // for keeping track of the current pid
 int gen_pid = 0;
-PCB_str	               *current_PCB = NULL;    // this is the currently running PCB
+PCB               *current_PCB = NULL;    // this is the currently running PCB
 
-PCB_str		           *timerList = NULL;      //first node in the timer queue
-PCB_str                *timer_tail = NULL;     //timer queue tail
-int	                   total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
+PCB		           *timerList = NULL;      //first node in the timer queue
+PCB                *timer_tail = NULL;     //timer queue tail
+int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 
 BOOL interrupt_lock = TRUE;
 
@@ -242,20 +242,20 @@ void    osInit( int argc, char *argv[]  ) {
 }                                               // End of osInit
 
 INT32 os_make_process(INT32* pid, char* name, INT32* error) {
-    PCB_str *PCB = (PCB_str *)(malloc(sizeof(PCB_str)));    // allocate memory for PCB
+    PCB* PCB = (PCB*)(malloc(sizeof(PCB)));    // allocate memory for PCB
 
-    PCB->p_time = 0;                                        // start time = now (zero)
+    PCB->delay = 0;                                        // start time = now (zero)
     PCB->p_id = gen_pid;                                    // assign pid
     gen_pid++;
-    PCB->p_state=CREATE;
+    PCB->state=CREATE;
 
-    memset(PCB->p_name, 0, MAX_NAME+1);                    // assign process name
-    strcpy(PCB->p_name, name);                             // assign process name
+    memset(PCB->name, 0, MAX_NAME+1);                    // assign process name
+    strcpy(PCB->name, name);                             // assign process name
 
     if (current_PCB != NULL)
-        PCB->p_parent = current_PCB->p_id;                // assign parent id
+        PCB->parent = current_PCB->p_id;                // assign parent id
     else
-        PCB->p_parent = -1;                               // -1 means this process is the parent process
+        PCB->parent = -1;                               // -1 means this process is the parent process
 
     (*error) = ERR_SUCCESS;                           // return error value
     (*pid) = PCB->p_id;                               // return pid
@@ -269,14 +269,14 @@ INT32 os_make_process(INT32* pid, char* name, INT32* error) {
 /*********************************************************
  * Creates a context for the current PCB
 **********************************************************/
-void make_context( PCB_str* PCB, void* procPTR ) {
+void make_context( PCB* PCB, void* procPTR ) {
 	Z502MakeContext( &PCB->context, procPTR, USER_MODE );
 }
 
 /*********************************************************
  * Switches contexts for the current PCB
 **********************************************************/
-void switch_context( PCB_str* PCB ) {
+void switch_context( PCB* PCB ) {
 	current_PCB = PCB;
     current_PCB -> p_state = RUN;      //update the PCB state to RUN
 	Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &current_PCB->context );
@@ -287,54 +287,6 @@ void switch_context( PCB_str* PCB ) {
         sort nodes based on wake up time (p_time in PCB);
         inputs are all PCB_str * entry
 *************************************************************************/
-INT32 add_to_timer_queue(PCB_str * entry) {
-    PCB_str** ptrFirst= &timerList;                        // pointer to the timer queue head
-    PCB_str*  PCB = (PCB_str*) (malloc(sizeof(PCB_str)));  // create memory for PCB
-    memcpy(PCB, entry, sizeof(PCB_str));                   // copy new PCB to this memory space
-    PCB_str* current = NULL;
-    PCB_str* previous = NULL;
+INT32 add_to_timer_queue(PCB* entry) {
 
-    entry->p_state = SLEEPING;                              //update state to sleep
-
-    int flag = 0;
-
-	// First one in the queue
-	if ( *ptrFirst  == NULL) {
-	    (*ptrFirst) = entry;
-		timer_tail = entry;
-        total_timer_pid++;
-	}
-	else {      // NOT the first PCB in the queue
-        current = (*ptrFirst);
-
-        while(current != NULL) {
-            if(entry->p_time < current->p_time) {
-                if(current == (*ptrFirst)) {
-                    (*ptrFirst) = entry;
-                    entry->next = current;
-                    total_timer_pid++;
-                    flag = 1;
-                    break;
-                }
-                else {
-                    previous->next = entry;
-                    entry->next = current;
-                    total_timer_pid++;
-                    flag = 1;
-                    break;
-                }
-            }
-            else {
-                previous = current;
-                current = current->next;
-            }
-        }
-
-        if(flag == 0) {
-            timer_tail->next = entry;
-            timer_tail = entry;
-            total_timer_pid++;
-        }
-    }
-	return -1;
 }

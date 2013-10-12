@@ -1,5 +1,9 @@
+#ifndef MY_GLOBALS
+#define MY_GLOBALS
+
 #include    "stdio.h"
 #include	"stdlib.h"
+#include    "list.h"
 
 ///PCB State Information
 #define	        CREATE		       100
@@ -20,26 +24,23 @@
 #define         NOTRUN              0
 #define         RUN                 1
 
-//PCB structure
 typedef struct {
-	char		p_name[MAX_NAME+1];      //name
-	INT32	    p_id;                    //process id
-    INT32		p_time;                  //wake up time
-	INT32		p_parent;                // parent control
-    INT32       p_state;                 //state
-	void	    *context;
-	void		*next;                    //link to next node
-	void        *sentBox;                 //to sent queue
-    void        *recvBox;                 // for recieve
-    INT32		msg_count;
-
-    INT16		pagetable[VIRTUAL_MEM_PGS]; //page table
-}PCB_str;
+    INT32   pid;
+    int     delay;
+    char*   name;
+    INT32   parent;
+    INT32   state;
+    INT32   mode;
+    INT32   priority;
+    void*   context;
+} PCB;
 
 //******** Function Prototypes *********//
 INT32 os_make_process(INT32* pid, char* name, INT32* error);
 
-void make_context( PCB_str* PCB, void* procPTR);
-void switch_context( PCB_str* PCB );
+void make_context( PCB* PCB, void* procPTR);
+void switch_context( PCB* PCB );
 
-INT32 add_to_timer_queue(PCB_str * entry);
+INT32 add_to_timer_queue(PCB* entry);
+
+#endif
