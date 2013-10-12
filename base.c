@@ -27,6 +27,7 @@
 #include             "protos.h"
 #include             "string.h"
 #include             "my_globals.h"
+#include            "list.h"
 
 
 extern INT16 Z502_MODE;
@@ -235,32 +236,32 @@ void    osInit( int argc, char *argv[]  ) {
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1a runs on a process recognized by the operating system.    */
-        //os_make_process( &i, "test1a", &i);
+        os_make_process( &i, "test1a", &i);
         Z502MakeContext( &base_process, (void *)test1a, USER_MODE );
         Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &base_process );
     }
 }                                               // End of osInit
 
 INT32 os_make_process(INT32* pid, char* name, INT32* error) {
-    PCB* PCB = (PCB*)(malloc(sizeof(PCB)));    // allocate memory for PCB
+    PCB* pcb = (PCB*) calloc(1, sizeof(PCB));    // allocate memory for PCB
 
-    PCB->delay = 0;                                        // start time = now (zero)
-    PCB->p_id = gen_pid;                                    // assign pid
+    pcb->delay = 0;                                        // start time = now (zero)
+    pcb->pid = gen_pid;                                    // assign pid
     gen_pid++;
-    PCB->state=CREATE;
+    pcb->state=CREATE;
 
-    memset(PCB->name, 0, MAX_NAME+1);                    // assign process name
-    strcpy(PCB->name, name);                             // assign process name
+    memset(pcb->name, 0, MAX_NAME+1);                    // assign process name
+    strcpy(pcb->name, name);                             // assign process name
 
     if (current_PCB != NULL)
-        PCB->parent = current_PCB->p_id;                // assign parent id
+        pcb->parent = current_PCB->pid;                // assign parent id
     else
-        PCB->parent = -1;                               // -1 means this process is the parent process
+        pcb->parent = -1;                               // -1 means this process is the parent process
 
     (*error) = ERR_SUCCESS;                           // return error value
-    (*pid) = PCB->p_id;                               // return pid
+    (*pid) = pcb->pid;                               // return pid
 
-    make_context(PCB, base_process);
+    make_context(pcb, base_process);
     //TODO: add PCB to ready queue here
 
     return 0;
@@ -278,7 +279,7 @@ void make_context( PCB* PCB, void* procPTR ) {
 **********************************************************/
 void switch_context( PCB* PCB ) {
 	current_PCB = PCB;
-    current_PCB -> p_state = RUN;      //update the PCB state to RUN
+    current_PCB -> state = RUN;      //update the PCB state to RUN
 	Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &current_PCB->context );
 }
 
