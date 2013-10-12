@@ -205,10 +205,7 @@ void    osInit( int argc, char *argv[]  ) {
     INT32               i;
     INT32               error_response;
 
-    printf("FIRST");
-    PCB* root_process = os_make_process("root_process", &error_response);
-    printf("Do i get here\n");
-    Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, root_process->context );
+    PCB* root_process;
 
     /* Demonstrates how calling arguments are passed thru to here       */
 
@@ -227,37 +224,36 @@ void    osInit( int argc, char *argv[]  ) {
     /*  Determine if the switch was set, and if so go to demo routine.  */
 
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
-        PCB* sample = os_make_process(argv[1], &error_response);
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, sample->context );
+        root_process = os_make_process(argv[1], &error_response);
+        Z502MakeContext( &root_process->context, (void*) sample_code, KERNEL_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &root_process->context );
     }                   /* This routine should never return!!           */
     else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
-        Z502MakeContext( &next_context, (void *)test0, USER_MODE );
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &next_context );
+        root_process = os_make_process(argv[1], &error_response);
+        Z502MakeContext( &root_process->context, (void*) test0, KERNEL_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &root_process->context );
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1a runs on a process recognized by the operating system.    */
-        os_make_process( "test1a", &error_response);
-        Z502MakeContext( &next_context, (void *)test1a, USER_MODE );
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &next_context );
+        root_process = os_make_process(argv[1], &error_response);
+        Z502MakeContext( &root_process->context, (void*) test1a, KERNEL_MODE );
+        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &root_process->context );
     }
 }                                               // End of osInit
 
 PCB* os_make_process(char* name, INT32* error) {
-    printf("Here 0");
     PCB* pcb = (PCB*) calloc(1, sizeof(PCB));    // allocate memory for PCB
 
     pcb->delay = 0;                                        // start time = now (zero)
     pcb->pid = gen_pid;                                    // assign pid
     gen_pid++;
     pcb->state=CREATE;
-    printf("Here 1");
 
     memset(pcb->name, 0, MAX_NAME);                    // assign process name
     strcpy(pcb->name, name);                             // assign process name
-    printf("Here 2");
 
     if (current_PCB != NULL)
         pcb->parent = current_PCB->pid;                // assign parent id
@@ -266,18 +262,9 @@ PCB* os_make_process(char* name, INT32* error) {
 
     (*error) = ERR_SUCCESS;                           // return error value
 
-    printf("Here 3");
-    make_context(pcb, pcb->context);
     //TODO: add PCB to ready queue here
 
     return pcb;
-}
-
-/*********************************************************
- * Creates a context for the current PCB
-**********************************************************/
-void make_context( PCB* PCB, void* procPTR ) {
-	Z502MakeContext( &PCB->context, procPTR, USER_MODE );
 }
 
 /*********************************************************

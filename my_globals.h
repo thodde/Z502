@@ -27,7 +27,7 @@
 typedef struct {
     INT32   pid;
     int     delay;
-    char*   name;
+    char    name[MAX_NAME];
     INT32   parent;
     INT32   state;
     INT32   mode;
@@ -38,7 +38,6 @@ typedef struct {
 //******** Function Prototypes *********//
 PCB* os_make_process(char* name, INT32* error);
 
-void make_context( PCB* PCB, void* procPTR);
 void switch_context( PCB* PCB );
 
 INT32 add_to_timer_queue(PCB* entry);
