@@ -7,8 +7,6 @@ typedef struct {
     struct Node* next;
 } Node, *LinkedList;
 
-LinkedList process_list;
-
 LinkedList create_list();
 int add_to_list( LinkedList, PCB*);
 
