@@ -39,6 +39,4 @@ typedef struct {
 PCB* os_make_process(char* name, INT32* error);
 void switch_context( PCB* pcb, short context_mode);
 
-INT32 add_to_timer_queue(PCB* entry);
-
 #endif

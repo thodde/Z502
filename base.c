@@ -41,9 +41,8 @@ extern void          *TO_VECTOR [];
 // for keeping track of the current pid
 int gen_pid = 0;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
+LinkedList         timer_queue;
 
-PCB		           *timerList = NULL;      //first node in the timer queue
-PCB                *timer_tail = NULL;     //timer queue tail
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 
 BOOL interrupt_lock = TRUE;
@@ -66,6 +65,8 @@ void    interrupt_handler( void ) {
     INT32              Index = 0;
     INT32              Time;
 
+    printf("GOT CALLED!!\n");
+
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
     // Set this device as target of our query
@@ -76,6 +77,7 @@ void    interrupt_handler( void ) {
     switch(device_id) {
         case(TIMER_INTERRUPT):
             MEM_READ(Z502ClockStatus, &Time);
+            // Remove current_PCB from timer queue
             interrupt_lock = FALSE;
             break;
     }
@@ -124,7 +126,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     static short        do_print = 10;
     short               i;
     INT32               current_time;
-    INT32               sleep_time;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -139,7 +140,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     }
 
     if (Z502_MODE == KERNEL_MODE) {
-        printf("I am in kernel mode\n");
         if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
             //printf("This is the data I received: %li\n", *(SystemCallData->Argument[0]));
             MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
@@ -157,14 +157,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         }
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
-            sleep_time = SystemCallData->Argument[0];
-            current_PCB->delay = (current_time+sleep_time);
-            //add_to_timer_queue(current_PCB);
-            //Z502Idle();
+            current_PCB->delay = SystemCallData->Argument[0];
+            start_timer();
         }
     }
     else if (Z502_MODE == USER_MODE) {
-        printf("I am in user mode\n");
         if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
             //TODO validate parameters
             if ((SystemCallData->NumberOfArguments - 1) < 1) {
@@ -182,10 +179,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         }
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
-            sleep_time = SystemCallData->Argument[0];
-            current_PCB->delay = (current_time+sleep_time);
-            //add_to_timer_queue(current_PCB);
-            //Z502Idle();
+            current_PCB->delay = SystemCallData->Argument[0];
+            start_timer();
         }
     }
     else {
@@ -206,6 +201,7 @@ void    osInit( int argc, char *argv[]  ) {
     INT32               error_response;
 
     PCB* root_process;
+    timer_queue = create_list();
 
     /* Demonstrates how calling arguments are passed thru to here       */
 
@@ -274,11 +270,15 @@ void switch_context( PCB* pcb, short context_mode) {
 	Z502SwitchContext( context_mode, &current_PCB->context );
 }
 
-/************************************************************************
-   add to timer queue:
-        sort nodes based on wake up time (p_time in PCB);
-        inputs are all PCB_str * entry
-*************************************************************************/
-INT32 add_to_timer_queue(PCB* entry) {
+void start_timer() {
+    INT32 status;
 
+    add_to_list(timer_queue, current_PCB);
+    MEM_WRITE(Z502TimerStart, &current_PCB->delay);
+    MEM_READ(Z502InterruptDevice, &status);
+    printf("Current status of device: %i\n", status);
+    Z502Idle();
+    MEM_READ(Z502InterruptDevice, &status);
+    //MEM_READ(Z502TimerStatus, &status);
+    printf("Current status is: %i\n", status);
 }
