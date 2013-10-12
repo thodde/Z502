@@ -39,6 +39,7 @@ int add_to_list( LinkedList l, PCB* p) {
     while (cursor != NULL && (cursor->data->delay < p->delay)) {
         prev = cursor;
         cursor = cursor->next;
+        //worthelss updates
     }
 
     //this is not an ordered list right now
