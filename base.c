@@ -139,14 +139,13 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         do_print--;
     }
 
-    if (Z502_MODE == KERNEL_MODE) {
-        if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
-            //printf("This is the data I received: %li\n", *(SystemCallData->Argument[0]));
+    //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
+    switch(call_type) {
+        case SYSNUM_GET_TIME_OF_DAY:
             MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
-        }
-        //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
-        else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
-            //TODO validate parameters
+            break;
+
+        case SYSNUM_TERMINATE_PROCESS:
             //Z502DestroyContext(base_process);  I think this is used when killing any other process other than the base process
 
             //TODO this should only be called when the parent process is killed, not when any process is killed
@@ -154,37 +153,19 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             //TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
             //printf("Returned with error: %i\n", SystemCallData->Argument[1]);
-        }
-        else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
+            break;
+
+        case SYSNUM_SLEEP:
             MEM_READ( Z502TimerStatus, &current_time);
             current_PCB->delay = SystemCallData->Argument[0];
             start_timer();
-        }
-    }
-    else if (Z502_MODE == USER_MODE) {
-        if (strncmp(call_names[call_type], "get_time", 8) == 0) { // handles GET_TIME_OF_DAY
-            //TODO validate parameters
-            if ((SystemCallData->NumberOfArguments - 1) < 1) {
-                //TODO throw error
-            }
-            else {
-            // Need to validate that the the supplied memory block resides in context space
-                GET_TIME_OF_DAY(SystemCallData->Argument[0]);
-            }
-        }
-        else if (strncmp(call_names[call_type], "term_proc", 9) == 0) {  // handles TERMINATE_PROCESS
-            //TODO validate parameters
-            TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
-            printf("Returned with error: %i\n", SystemCallData->Argument[1]);
-        }
-        else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
-            MEM_READ( Z502TimerStatus, &current_time);
-            current_PCB->delay = SystemCallData->Argument[0];
-            start_timer();
-        }
-    }
-    else {
-        printf("Error!  Current mode is unrecognized!!!\n");
+            break;
+
+
+        default:
+            printf("Unrecognized system call!!\n");
+
+
     }
 }                                               // End of svc
 
@@ -272,10 +253,16 @@ void switch_context( PCB* pcb, short context_mode) {
 
 void start_timer() {
     INT32 status;
+    MEM_READ(Z502ClockStatus, &status);
+    printf("Current time is: %i\n", status);
 
     add_to_list(timer_queue, current_PCB);
     MEM_WRITE(Z502TimerStart, &current_PCB->delay);
     MEM_READ(Z502TimerStatus, &status);
     printf("Current status is: %i\n", status);
     Z502Idle();
+
+    MEM_READ(Z502ClockStatus, &status);
+    printf("Current time is: %i\n", status);
+
 }
