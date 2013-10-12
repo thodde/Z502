@@ -27,7 +27,7 @@
 #include             "protos.h"
 #include             "string.h"
 #include             "my_globals.h"
-#include            "list.h"
+#include             "list.h"
 
 
 extern INT16 Z502_MODE;
@@ -40,7 +40,7 @@ extern void          *TO_VECTOR [];
 
 // for keeping track of the current pid
 int gen_pid = 0;
-PCB               *current_PCB = NULL;    // this is the currently running PCB
+PCB                *current_PCB = NULL;    // this is the currently running PCB
 
 PCB		           *timerList = NULL;      //first node in the timer queue
 PCB                *timer_tail = NULL;     //timer queue tail
@@ -158,9 +158,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
             sleep_time = SystemCallData->Argument[0];
-            //current_PCB->p_time = (current_time+sleep_time);
+            current_PCB->delay = (current_time+sleep_time);
             //add_to_timer_queue(current_PCB);
-            Z502Idle();
+            //Z502Idle();
         }
     }
     else if (Z502_MODE == USER_MODE) {
@@ -183,9 +183,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         else if (strncmp(call_names[call_type], "sleep", 5) == 0) {
             MEM_READ( Z502TimerStatus, &current_time);
             sleep_time = SystemCallData->Argument[0];
-            //current_PCB->p_time = (current_time+sleep_time);
+            current_PCB->delay = (current_time+sleep_time);
             //add_to_timer_queue(current_PCB);
-            Z502Idle();
+            //Z502Idle();
         }
     }
     else {
@@ -226,21 +226,21 @@ void    osInit( int argc, char *argv[]  ) {
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
         root_process = os_make_process(argv[1], &error_response);
         Z502MakeContext( &root_process->context, (void*) sample_code, KERNEL_MODE );
-        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &root_process->context );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }                   /* This routine should never return!!           */
     else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
         root_process = os_make_process(argv[1], &error_response);
         Z502MakeContext( &root_process->context, (void*) test0, KERNEL_MODE );
-        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &root_process->context );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1a runs on a process recognized by the operating system.    */
         root_process = os_make_process(argv[1], &error_response);
         Z502MakeContext( &root_process->context, (void*) test1a, KERNEL_MODE );
-        Z502SwitchContext( SWITCH_CONTEXT_KILL_MODE, &root_process->context );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
 }                                               // End of osInit
 
@@ -262,18 +262,16 @@ PCB* os_make_process(char* name, INT32* error) {
 
     (*error) = ERR_SUCCESS;                           // return error value
 
-    //TODO: add PCB to ready queue here
-
     return pcb;
 }
 
 /*********************************************************
  * Switches contexts for the current PCB
 **********************************************************/
-void switch_context( PCB* PCB ) {
-	current_PCB = PCB;
+void switch_context( PCB* pcb, short context_mode) {
+	current_PCB = pcb;
     current_PCB -> state = RUN;      //update the PCB state to RUN
-	Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &current_PCB->context );
+	Z502SwitchContext( context_mode, &current_PCB->context );
 }
 
 /************************************************************************
