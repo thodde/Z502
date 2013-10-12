@@ -36,7 +36,7 @@ typedef struct {
 } PCB;
 
 //******** Function Prototypes *********//
-INT32 os_make_process(INT32* pid, char* name, INT32* error);
+PCB* os_make_process(char* name, INT32* error);
 
 void make_context( PCB* PCB, void* procPTR);
 void switch_context( PCB* PCB );
