@@ -161,10 +161,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             start_timer();
             break;
 
+        case SYSNUM_CREATE_PROCESS:
+
+            break;
 
         default:
             printf("Unrecognized system call!!\n");
-
 
     }
 }                                               // End of svc
@@ -219,6 +221,13 @@ void    osInit( int argc, char *argv[]  ) {
         Z502MakeContext( &root_process->context, (void*) test1a, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1b" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1a runs on a process recognized by the operating system.    */
+        root_process = os_make_process(argv[1], &error_response);
+        Z502MakeContext( &root_process->context, (void*) test1b, KERNEL_MODE );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+    }
 }                                               // End of osInit
 
 PCB* os_make_process(char* name, INT32* error) {
@@ -264,5 +273,10 @@ void start_timer() {
 
     MEM_READ(Z502ClockStatus, &status);
     printf("Current time is: %i\n", status);
+
+}
+
+// This will be needed later
+void wait_for_interrupt() {
 
 }
