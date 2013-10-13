@@ -44,6 +44,8 @@ PCB                *current_PCB = NULL;    // this is the currently running PCB
 LinkedList         timer_queue;
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
+INT32              error_response;
+
 
 BOOL interrupt_lock = TRUE;
 
@@ -126,6 +128,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     static short        do_print = 10;
     short               i;
     INT32               current_time;
+    char                *name;
+    void                *addr;
+    int                 priority;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -162,6 +167,14 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_CREATE_PROCESS:
+            // CONFIRM ALL THIS WORKS
+            name = (char *)SystemCallData->Argument[0];
+            addr = SystemCallData->Argument[1];
+            priority = (int)SystemCallData->Argument[2];
+            os_make_process(name, &error_response);
+            break;
+
+        case SYSNUM_GET_PROCESS_ID:
 
             break;
 
@@ -181,7 +194,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 void    osInit( int argc, char *argv[]  ) {
     void                *next_context;
     INT32               i;
-    INT32               error_response;
 
     PCB* root_process;
     timer_queue = create_list();
@@ -223,9 +235,16 @@ void    osInit( int argc, char *argv[]  ) {
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1b" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
-        test1a runs on a process recognized by the operating system.    */
+        test1b runs on a process recognized by the operating system.    */
         root_process = os_make_process(argv[1], &error_response);
         Z502MakeContext( &root_process->context, (void*) test1b, KERNEL_MODE );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+    }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1c" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1c runs on a process recognized by the operating system.    */
+        root_process = os_make_process(argv[1], &error_response);
+        Z502MakeContext( &root_process->context, (void*) test1c, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
 }                                               // End of osInit
@@ -254,7 +273,9 @@ PCB* os_make_process(char* name, INT32* error) {
 // Used for removing unneeded processes
 void os_destroy_process(PCB* pcb) {
     //this needs to be more complicated than this...
+    Z502DestroyContext(pcb->context);
     remove_from_list(timer_queue, pcb);
+    free(pcb);
 }
 
 /*********************************************************
