@@ -62,3 +62,34 @@ int add_to_list( LinkedList l, PCB* p) {
 //    l->next = new_node;
     return 1;
 }
+
+BOOL remove_from_list(LinkedList l, PCB* p) {
+    // iterate through the list until we find the appropriate spot to remove the node
+    Node *cursor = l;
+    Node *prev = NULL;
+
+    while (cursor != NULL && (cursor->data->pid != p->pid)) {
+        prev = cursor;
+        cursor = cursor->next;
+
+        if(cursor->data->pid == p->pid) {
+            prev->next = cursor->next;
+            free(cursor);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int get_length(LinkedList l) {
+    int length = 0;
+    Node *cursor = l;
+    Node *prev = NULL;
+
+    while( cursor != NULL ){
+        cursor = cursor->next;
+        length++;
+    }
+
+    return length;
+}

@@ -37,6 +37,7 @@ typedef struct {
 
 //******** Function Prototypes *********//
 PCB* os_make_process(char* name, INT32* error);
+void os_destroy_process(PCB* pcb);
 void switch_context( PCB* pcb, short context_mode);
 
 #endif

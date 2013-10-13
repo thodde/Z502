@@ -9,5 +9,7 @@ typedef struct {
 
 LinkedList create_list();
 int add_to_list( LinkedList, PCB*);
+BOOL remove_from_list(LinkedList, PCB*);
+int get_length(LinkedList l);
 
 #endif

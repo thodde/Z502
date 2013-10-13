@@ -251,6 +251,12 @@ PCB* os_make_process(char* name, INT32* error) {
     return pcb;
 }
 
+// Used for removing unneeded processes
+void os_destroy_process(PCB* pcb) {
+    //this needs to be more complicated than this...
+    remove_from_list(timer_queue, pcb);
+}
+
 /*********************************************************
  * Switches contexts for the current PCB
 **********************************************************/
