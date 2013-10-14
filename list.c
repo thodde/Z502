@@ -78,6 +78,10 @@ BOOL remove_from_list(LinkedList l, PCB* p) {
     Node *cursor = l;
     Node *prev = NULL;
 
+    if (l->data == NULL) {
+        return NULL;
+    }
+
     while (cursor != NULL && (cursor->data->pid != p->pid)) {
         prev = cursor;
         cursor = cursor->next;
