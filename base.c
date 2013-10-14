@@ -131,6 +131,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     char                *name;
     void                *addr;
     int                 priority;
+    PCB*                process_handle;
+    Node*               process_node;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -175,7 +177,25 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_GET_PROCESS_ID:
+            name = (char *)SystemCallData->Argument[0];
 
+            // if no pid was specified, we will just take the current process
+            if (strcmp(name, "") == 0) {
+                process_handle = current_PCB;
+            }
+            else {
+                // otherwise, search the timer queue for the process id (?)
+                process_node = search_by_pid(timer_queue, current_PCB->pid);
+
+                // we got it!
+                if( process_node != NULL ) {
+                    name = process_node->data->name;
+                }
+                else {
+                    // no pid found
+                    break;
+                }
+            }
             break;
 
         default:

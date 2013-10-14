@@ -11,5 +11,6 @@ LinkedList create_list();
 int add_to_list( LinkedList, PCB*);
 BOOL remove_from_list(LinkedList, PCB*);
 int get_length(LinkedList l);
+Node* search_by_pid(LinkedList l, int pid);
 
 #endif

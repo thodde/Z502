@@ -84,7 +84,6 @@ BOOL remove_from_list(LinkedList l, PCB* p) {
 int get_length(LinkedList l) {
     int length = 0;
     Node *cursor = l;
-    Node *prev = NULL;
 
     while( cursor != NULL ){
         cursor = cursor->next;
@@ -92,4 +91,19 @@ int get_length(LinkedList l) {
     }
 
     return length;
+}
+
+Node* search_by_pid(LinkedList l, int pid) {
+    Node* cursor = l;
+    PCB* p;
+
+    while(cursor != NULL) {
+        p = cursor->data;
+
+        if (p->pid == pid) {
+            return cursor;
+        }
+        cursor = cursor->next;
+    }
+    return NULL;
 }
