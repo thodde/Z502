@@ -169,11 +169,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_CREATE_PROCESS:
-            // CONFIRM ALL THIS WORKS
             name = (char *)SystemCallData->Argument[0];
             addr = SystemCallData->Argument[1];
             priority = (int)SystemCallData->Argument[2];
-            //don't know what's in SystemCallData->Argument[3];
             INT32 error_response; //= (INT32)SystemCallData->Argument[4];
             process_handle = os_make_process(name, priority, &error_response);
 
@@ -183,7 +181,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             else {
                 SystemCallData->Argument[4] = error_response;
             }
-
 
             break;
 
@@ -289,6 +286,13 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         return NULL;
     }
 
+    Node* tmp_node = search_for_name(&timer_queue, name);
+    printf("HERE IN make_process\n");
+    if (tmp_node != NULL) {
+        *error = ERR_BAD_PARAM;
+        return NULL;
+    }
+
     PCB* pcb = (PCB*) calloc(1, sizeof(PCB));    // allocate memory for PCB
 
     pcb->delay = 0;                                        // start time = now (zero)
@@ -313,7 +317,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 void os_destroy_process(PCB* pcb) {
     //this needs to be more complicated than this...
     Z502DestroyContext(pcb->context);
-    remove_from_list(timer_queue, pcb);
+    remove_from_list(&timer_queue, pcb);
     free(pcb);
 }
 
@@ -331,7 +335,7 @@ void start_timer() {
     MEM_READ(Z502ClockStatus, &status);
     printf("Current time is: %i\n", status);
 
-    add_to_list(timer_queue, current_PCB);
+    add_to_list(&timer_queue, current_PCB);
     MEM_WRITE(Z502TimerStart, &current_PCB->delay);
     MEM_READ(Z502TimerStatus, &status);
     printf("Current status is: %i\n", status);

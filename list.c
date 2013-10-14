@@ -95,12 +95,9 @@ int get_length(LinkedList l) {
 
 Node* search_for_pid(LinkedList l, int pid) {
     Node* cursor = l;
-    PCB* p;
 
     while(cursor != NULL) {
-        p = cursor->data;
-
-        if (p->pid == pid) {
+        if (cursor->data->pid == pid) {
             return cursor;
         }
         cursor = cursor->next;
@@ -110,15 +107,15 @@ Node* search_for_pid(LinkedList l, int pid) {
 
 Node* search_for_name(LinkedList l, char* name) {
     Node* cursor = l;
-    PCB* p;
 
     while(cursor != NULL) {
-        p = cursor->data;
-
-        if (strcmp(p->name, name) == 0) {
+        if (strcmp(cursor->data->name, name) == 0) {
+            printf("FOUND A MATCH\n");
             return cursor;
         }
+        printf("MOVING TO THE NEXT NODE\n");
         cursor = cursor->next;
     }
+    printf("NO MATCHES FOUND\n");
     return NULL;
 }
