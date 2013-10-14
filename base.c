@@ -41,7 +41,8 @@ extern void          *TO_VECTOR [];
 // for keeping track of the current pid
 int gen_pid = 0;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
-LinkedList         timer_queue;
+LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
+LinkedList         process_list;          // Holds all processes that are currently running
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              error_response;
@@ -228,6 +229,7 @@ void    osInit( int argc, char *argv[]  ) {
 
     PCB* root_process;
     timer_queue = create_list();
+    process_list = create_list();
 
     /* Demonstrates how calling arguments are passed thru to here       */
 
@@ -285,6 +287,10 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         *error = ERR_BAD_PARAM;
         return NULL;
     }
+    if (get_length(process_list) >= MAX_PROCESSES) {
+        *error = ERR_BAD_PARAM;
+        return NULL;
+    }
 
     Node* tmp_node = search_for_name(&timer_queue, name);
     printf("HERE IN make_process\n");
@@ -309,6 +315,8 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         pcb->parent = -1;                               // -1 means this process is the parent process
 
     (*error) = ERR_SUCCESS;                           // return error value
+
+    add_to_list(process_list, pcb);
 
     return pcb;
 }
