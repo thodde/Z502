@@ -201,11 +201,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         case SYSNUM_GET_PROCESS_ID:
             name = (char *)SystemCallData->Argument[0];
 
-            printf("HERE\n");
             if (strcmp(name, "") == 0) {
                 //return pid of calling process
                 SystemCallData->Argument[1] = current_PCB->pid;
-                SystemCallData->Argument[2] = ERR_SUCCESS;
+                //SystemCallData->Argument[2] = ERR_SUCCESS;
             }
             else {
                 // search the process queue for the process id
