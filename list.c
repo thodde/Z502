@@ -109,6 +109,10 @@ int get_length(LinkedList l) {
 Node* search_for_pid(LinkedList l, int pid) {
     Node* cursor = l;
 
+    if (l->data == NULL) {
+        return NULL;
+    }
+
     while(cursor != NULL) {
         if (cursor->data->pid == pid) {
             return cursor;
@@ -120,6 +124,10 @@ Node* search_for_pid(LinkedList l, int pid) {
 
 Node* search_for_name(LinkedList l, char* name) {
     Node* cursor = l;
+
+    if (l->data == NULL) {
+        return NULL;
+    }
 
     while(cursor != NULL) {
         if (strcmp(cursor->data->name, name) == 0) {
