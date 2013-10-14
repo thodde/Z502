@@ -173,7 +173,13 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             name = (char *)SystemCallData->Argument[0];
             addr = SystemCallData->Argument[1];
             priority = (int)SystemCallData->Argument[2];
-            os_make_process(name, &error_response);
+            error_response = (INT32)SystemCallData->Argument[4];
+            process_handle = os_make_process(name, &error_response);
+
+            if(process_handle != NULL) {
+                process_handle->priority = priority;
+            }
+
             break;
 
         case SYSNUM_GET_PROCESS_ID:
