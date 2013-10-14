@@ -287,6 +287,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         *error = ERR_BAD_PARAM;
         return NULL;
     }
+    printf("Current size: %i\n", get_length(process_list));
     if (get_length(process_list) >= MAX_PROCESSES) {
         *error = ERR_BAD_PARAM;
         return NULL;
