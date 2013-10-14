@@ -154,6 +154,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_TERMINATE_PROCESS:
+            // TODO: If SystemCallData->Argument[0] == -1 : kill self
+            // if SystemCallData->Argument[0] == -2 : kill self + all children
+
             // Search for the process ID that was passed in
             process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
 
