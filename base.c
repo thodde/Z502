@@ -154,32 +154,37 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_TERMINATE_PROCESS:
-            // TODO: If SystemCallData->Argument[0] == -1 : kill self
-            // if SystemCallData->Argument[0] == -2 : kill self + all children
+            if (SystemCallData->Argument[0] == -1) {
+                //TODO kill self
+                //INT32 process_node_pid = current_pcb->pid;
+            }
+            else if (SystemCallData->Argument[0] == -2) {
+                //TODO kill self and all of children
 
-            // Search for the process ID that was passed in
-            process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
-
-            // If we found the process, destroy it
-            if(process_node != NULL) {
-                INT32 process_node_pid = process_node->data->pid;
-                PCB *killedNode = remove_from_list(process_list, process_node->data->pid);
-
-                os_destroy_process(killedNode);
-
-                // The root process ID is always 1, so check to see if the
-                // root process is getting killed. If so, call Z502Halt()
-                // because we are finished
-                *(SystemCallData->Argument[1]) = ERR_SUCCESS;
-                if (process_node_pid == 1) {
-                    Z502Halt();
-                }
             }
             else {
-                // If the process was not found, return an error
-                *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
-            }
+                process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
 
+                // If we found the process, destroy it
+                if(process_node != NULL) {
+                    INT32 process_node_pid = process_node->data->pid;
+                    PCB *killedNode = remove_from_list(process_list, process_node->data->pid);
+
+                    os_destroy_process(killedNode);
+
+                    // The root process ID is always 1, so check to see if the
+                    // root process is getting killed. If so, call Z502Halt()
+                    // because we are finished
+                    *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                    if (process_node_pid == 1) {
+                        Z502Halt();
+                    }
+                }
+                else {
+                    // If the process was not found, return an error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
+            }
             break;
 
         case SYSNUM_SLEEP:
