@@ -190,14 +190,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             name = (char *)SystemCallData->Argument[0];
             addr = SystemCallData->Argument[1];
             priority = (int)SystemCallData->Argument[2];
-            INT32 error_response; //= (INT32)SystemCallData->Argument[4];
-            process_handle = os_make_process(name, priority, &error_response);
+            process_handle = os_make_process(name, priority, SystemCallData->Argument[4]);
 
             if(process_handle != NULL) {
                 SystemCallData->Argument[3] = process_handle->pid;
-            }
-            else {
-                SystemCallData->Argument[4] = error_response;
             }
 
             break;
@@ -305,6 +301,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
     }
 
     if (get_length(process_list) >= MAX_PROCESSES) {
+        printf("Reached maximum number of processes\n");
         *error = ERR_BAD_PARAM;
         return NULL;
     }
