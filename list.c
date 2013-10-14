@@ -73,19 +73,19 @@ int add_to_list( LinkedList l, PCB* p) {
     return 1;
 }
 
-BOOL remove_from_list(LinkedList l, INT32 pid) {
+PCB* remove_from_list(LinkedList l, INT32 pid) {
     // iterate through the list until we find the appropriate spot to remove the node
 
     if (l == NULL) {
-        return 0;
+        return NULL;
     }
 
     if (l->data == NULL) {
-        return 0;
+        return NULL;
     }
 
     if (l->data->pid == pid) {
-        free(l->data);
+        PCB* returnVal = l->data;
         if (l->next == NULL) {
             //empty list
             l->data = NULL;
@@ -96,7 +96,7 @@ BOOL remove_from_list(LinkedList l, INT32 pid) {
             l->next = next->next;
             free(l->next);
         }
-        return 1;
+        return returnVal;
     }
 
     Node *cursor = l;
@@ -105,16 +105,16 @@ BOOL remove_from_list(LinkedList l, INT32 pid) {
     while (cursor != NULL) {
         if (cursor->data->pid == pid) {
             prev->next = cursor->next;
-            free(cursor->data);
+            PCB* returnVal = cursor->data;
             free(cursor);
 
-            return 1;
+            return returnVal;
         }
 
         prev = cursor;
         cursor = cursor->next;
     }
-    return 0;
+    return NULL;
 }
 
 int get_length(LinkedList l) {
@@ -132,7 +132,7 @@ int get_length(LinkedList l) {
     return length;
 }
 
-Node* search_for_pid(LinkedList l, int pid) {
+Node* search_for_pid(LinkedList l, INT32 pid) {
     Node* cursor = l;
 
     if (l->data == NULL) {

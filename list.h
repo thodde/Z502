@@ -9,9 +9,9 @@ typedef struct {
 
 LinkedList create_list();
 int add_to_list( LinkedList, PCB*);
-BOOL remove_from_list(LinkedList, INT32);
+PCB* remove_from_list(LinkedList, INT32);
 int get_length(LinkedList l);
-Node* search_for_pid(LinkedList l, int pid);
+Node* search_for_pid(LinkedList l, INT32 pid);
 Node* search_for_name(LinkedList l, char* name);
 
 #endif

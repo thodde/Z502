@@ -39,7 +39,7 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 extern void          *TO_VECTOR [];
 
 // for keeping track of the current pid
-int gen_pid = 1;
+INT32 gen_pid = 1;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;          // Holds all processes that are currently running
@@ -163,8 +163,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             // If we found the process, destroy it
             if(process_node != NULL) {
                 INT32 process_node_pid = process_node->data->pid;
-                remove_from_list(process_list, process_node->data);
-                os_destroy_process(process_node->data);
+                PCB *killedNode = remove_from_list(process_list, process_node->data->pid);
+
+                os_destroy_process(killedNode);
 
                 // The root process ID is always 1, so check to see if the
                 // root process is getting killed. If so, call Z502Halt()
@@ -336,7 +337,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 // Used for removing unneeded processes
 void os_destroy_process(PCB* pcb) {
     //this needs to be more complicated than this...
-    Z502DestroyContext(pcb->context);
+    Z502DestroyContext(&(pcb->context));
     remove_from_list(process_list, pcb);
     free(pcb);
 }
