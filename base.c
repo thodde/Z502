@@ -170,13 +170,14 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 // The root process ID is always 1, so check to see if the
                 // root process is getting killed. If so, call Z502Halt()
                 // because we are finished
+                *(SystemCallData->Argument[1]) = ERR_SUCCESS;
                 if (process_node_pid == 1) {
                     Z502Halt();
                 }
             }
             else {
                 // If the process was not found, return an error
-                *(SystemCallData->Argument[0]) = ERR_BAD_PARAM;
+                *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
             }
 
             break;
@@ -337,9 +338,17 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 // Used for removing unneeded processes
 void os_destroy_process(PCB* pcb) {
     //this needs to be more complicated than this...
-    Z502DestroyContext(&(pcb->context));
+    if (pcb == NULL)
+        printf("But PCB is null!\n");
+    else
+        printf("PCB is still good: %ld\n", pcb->pid);
+    printf("Do I get here 1?\n");
+    //Z502DestroyContext(pcb->context);
+    printf("Do I get here 2?\n");
     remove_from_list(process_list, pcb);
+    printf("Do I get here 3?\n");
     free(pcb);
+    printf("Do I get here 4?\n");
 }
 
 /*********************************************************
