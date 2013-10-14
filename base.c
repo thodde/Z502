@@ -173,12 +173,17 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             name = (char *)SystemCallData->Argument[0];
             addr = SystemCallData->Argument[1];
             priority = (int)SystemCallData->Argument[2];
-            error_response = (INT32)SystemCallData->Argument[4];
-            process_handle = os_make_process(name, &error_response);
+            //don't know what's in SystemCallData->Argument[3];
+            INT32 error_response; //= (INT32)SystemCallData->Argument[4];
+            process_handle = os_make_process(name, priority, &error_response);
 
             if(process_handle != NULL) {
                 process_handle->priority = priority;
             }
+            else {
+                SystemCallData->Argument[4] = error_response;
+            }
+
 
             break;
 
@@ -241,41 +246,46 @@ void    osInit( int argc, char *argv[]  ) {
     /*  Determine if the switch was set, and if so go to demo routine.  */
 
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
-        root_process = os_make_process(argv[1], &error_response);
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &root_process->context, (void*) sample_code, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }                   /* This routine should never return!!           */
     else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], &error_response);
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &root_process->context, (void*) test0, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1a runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], &error_response);
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &root_process->context, (void*) test1a, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1b" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1b runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], &error_response);
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &root_process->context, (void*) test1b, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1c" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1c runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], &error_response);
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &root_process->context, (void*) test1c, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
 }                                               // End of osInit
 
-PCB* os_make_process(char* name, INT32* error) {
+PCB* os_make_process(char* name, INT32 priority, INT32* error) {
+    if ((priority < MIN_PRIORITY) || (priority > MAX_PRIORITY)) {
+        *error = ERR_BAD_PARAM;
+        return NULL;
+    }
+
     PCB* pcb = (PCB*) calloc(1, sizeof(PCB));    // allocate memory for PCB
 
     pcb->delay = 0;                                        // start time = now (zero)

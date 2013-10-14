@@ -20,6 +20,11 @@
 #define			MAX_MSG			   64
 #define			MAX_MSG_COUNT	   10
 
+// PROCESS PRIORITY LIMITS
+#define         MIN_PRIORITY        0
+#define         DEFAULT_PRIORITY    5
+#define         MAX_PRIORITY        10
+
 // Flags to determine whether or not to run a process upon creation
 #define         NOTRUN              0
 #define         RUN                 1
@@ -36,7 +41,7 @@ typedef struct {
 } PCB;
 
 //******** Function Prototypes *********//
-PCB* os_make_process(char* name, INT32* error);
+PCB* os_make_process(char* name, INT32 priority, INT32* error);
 void os_destroy_process(PCB* pcb);
 void switch_context( PCB* pcb, short context_mode);
 
