@@ -193,7 +193,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             process_handle = os_make_process(name, priority, SystemCallData->Argument[4]);
 
             if(process_handle != NULL) {
-                SystemCallData->Argument[3] = process_handle->pid;
+                *(SystemCallData->Argument[3]) = process_handle->pid;
             }
 
             break;
