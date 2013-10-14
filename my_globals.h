@@ -15,7 +15,7 @@
 #define			TERMINATE		   106
 
 // PCB information
-#define			MAX_PIDs	       10
+#define			MAX_PROCESSES      10
 #define			MAX_NAME	       16
 #define			MAX_MSG			   64
 #define			MAX_MSG_COUNT	   10
