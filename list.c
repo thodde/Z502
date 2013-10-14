@@ -93,7 +93,7 @@ int get_length(LinkedList l) {
     return length;
 }
 
-Node* search_by_pid(LinkedList l, int pid) {
+Node* search_for_pid(LinkedList l, int pid) {
     Node* cursor = l;
     PCB* p;
 
@@ -101,6 +101,21 @@ Node* search_by_pid(LinkedList l, int pid) {
         p = cursor->data;
 
         if (p->pid == pid) {
+            return cursor;
+        }
+        cursor = cursor->next;
+    }
+    return NULL;
+}
+
+Node* search_for_name(LinkedList l, char* name) {
+    Node* cursor = l;
+    PCB* p;
+
+    while(cursor != NULL) {
+        p = cursor->data;
+
+        if (strcmp(p->name, name) == 0) {
             return cursor;
         }
         cursor = cursor->next;

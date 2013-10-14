@@ -190,20 +190,23 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         case SYSNUM_GET_PROCESS_ID:
             name = (char *)SystemCallData->Argument[0];
 
-            // if no pid was specified, we will just take the current process
+            // if no process name was specified, we will just take the current process
             if (strcmp(name, "") == 0) {
                 process_handle = current_PCB;
+                SystemCallData->Argument[4] = ERR_SUCCESS;
             }
             else {
                 // otherwise, search the timer queue for the process id (?)
-                process_node = search_by_pid(timer_queue, current_PCB->pid);
+                process_node = search_for_name(timer_queue, name);
 
                 // we got it!
-                if( process_node != NULL ) {
+                if (process_node != NULL) {
                     name = process_node->data->name;
+                    SystemCallData->Argument[4] = ERR_SUCCESS;
                 }
                 else {
-                    // no pid found
+                    // no matching process name found
+                    SystemCallData->Argument[4] = ERR_BAD_PARAM;
                     break;
                 }
             }
