@@ -39,7 +39,7 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 extern void          *TO_VECTOR [];
 
 // for keeping track of the current pid
-int gen_pid = 0;
+int gen_pid = 1;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;          // Holds all processes that are currently running
