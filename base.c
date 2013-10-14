@@ -154,13 +154,27 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_TERMINATE_PROCESS:
-            //Z502DestroyContext(base_process);  I think this is used when killing any other process other than the base process
+            // Search for the process ID that was passed in
+            process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
+            INT32 process_node_pid = process_node->data->pid;
 
-            //TODO this should only be called when the parent process is killed, not when any process is killed
-            Z502Halt();
+            // If we found the process, destroy it
+            if(process_node != NULL) {
+                remove_from_list(process_list, process_node->data);
+                os_destroy_process(process_node->data);
 
-            //TERMINATE_PROCESS(SystemCallData->Argument[0], SystemCallData->Argument[1]);
-            //printf("Returned with error: %i\n", SystemCallData->Argument[1]);
+                // The root process ID is always 1, so check to see if the
+                // root process is getting killed. If so, call Z502Halt()
+                // because we are finished
+                if (process_node_pid == 1) {
+                    Z502Halt();
+                }
+            }
+            else {
+                // If the process was not found, return an error
+                SystemCallData->Argument[0] = ERR_BAD_PARAM;
+            }
+
             break;
 
         case SYSNUM_SLEEP:
@@ -188,31 +202,24 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         case SYSNUM_GET_PROCESS_ID:
             name = (char *)SystemCallData->Argument[0];
 
-            // if no process name was specified, we will just take the current process
-            if (strcmp(name, "") == 0) {
-                process_handle = current_PCB;
+            // search the process queue for the process id
+            process_node = search_for_name(process_list, name);
+
+            // we got it!
+            if (process_node != NULL) {
+                name = process_node->data->name;
                 SystemCallData->Argument[4] = ERR_SUCCESS;
             }
             else {
-                // otherwise, search the timer queue for the process id (?)
-                process_node = search_for_name(process_list, name);
-
-                // we got it!
-                if (process_node != NULL) {
-                    name = process_node->data->name;
-                    SystemCallData->Argument[4] = ERR_SUCCESS;
-                }
-                else {
-                    // no matching process name found
-                    SystemCallData->Argument[4] = ERR_BAD_PARAM;
-                    break;
-                }
+                // no matching process name found
+                SystemCallData->Argument[4] = ERR_BAD_PARAM;
+                break;
             }
+
             break;
 
         default:
             printf("Unrecognized system call!!\n");
-
     }
 }                                               // End of svc
 
