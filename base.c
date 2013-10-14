@@ -175,7 +175,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
             else {
                 // If the process was not found, return an error
-                SystemCallData->Argument[0] = ERR_BAD_PARAM;
+                *(SystemCallData->Argument[0]) = ERR_BAD_PARAM;
             }
 
             break;
@@ -193,7 +193,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             process_handle = os_make_process(name, priority, SystemCallData->Argument[4]);
 
             if(process_handle != NULL) {
-                SystemCallData->Argument[3] = process_handle->pid;
+                *(SystemCallData->Argument[3]) = process_handle->pid;
             }
 
             break;
@@ -203,8 +203,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             if (strcmp(name, "") == 0) {
                 //return pid of calling process
-                SystemCallData->Argument[1] = current_PCB->pid;
-                //SystemCallData->Argument[2] = ERR_SUCCESS;
+                *(SystemCallData->Argument[1]) = current_PCB->pid;
+                *(SystemCallData->Argument[2]) = ERR_SUCCESS;
             }
             else {
                 // search the process queue for the process id
@@ -212,12 +212,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
                 // we got it!
                 if (process_node != NULL) {
-                    SystemCallData->Argument[1] = process_node->data->pid;
-                    SystemCallData->Argument[2] = ERR_SUCCESS;
+                    *(SystemCallData->Argument[1]) = process_node->data->pid;
+                    *(SystemCallData->Argument[2]) = ERR_SUCCESS;
                 }
                 else {
                     // no matching process name found
-                    SystemCallData->Argument[2] = ERR_BAD_PARAM;
+                    *(SystemCallData->Argument[2]) = ERR_BAD_PARAM;
                 }
             }
             break;
