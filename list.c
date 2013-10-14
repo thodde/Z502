@@ -43,7 +43,6 @@ int add_to_list( LinkedList l, PCB* p) {
     while (cursor != NULL && (cursor->data->delay < p->delay)) {
         prev = cursor;
         cursor = cursor->next;
-        //worthless updates
     }
 
     //this is not an ordered list right now
@@ -114,12 +113,9 @@ Node* search_for_name(LinkedList l, char* name) {
 
     while(cursor != NULL) {
         if (strcmp(cursor->data->name, name) == 0) {
-            printf("FOUND A MATCH\n");
             return cursor;
         }
-        printf("MOVING TO THE NEXT NODE\n");
         cursor = cursor->next;
     }
-    printf("NO MATCHES FOUND\n");
     return NULL;
 }

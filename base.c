@@ -195,7 +195,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
             else {
                 // otherwise, search the timer queue for the process id (?)
-                process_node = search_for_name(timer_queue, name);
+                process_node = search_for_name(process_list, name);
 
                 // we got it!
                 if (process_node != NULL) {
@@ -292,8 +292,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         return NULL;
     }
 
-    Node* tmp_node = search_for_name(&timer_queue, name);
-    printf("HERE IN make_process\n");
+    Node* tmp_node = search_for_name(process_list, name);
     if (tmp_node != NULL) {
         *error = ERR_BAD_PARAM;
         return NULL;
@@ -325,7 +324,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 void os_destroy_process(PCB* pcb) {
     //this needs to be more complicated than this...
     Z502DestroyContext(pcb->context);
-    remove_from_list(&timer_queue, pcb);
+    remove_from_list(process_list, pcb);
     free(pcb);
 }
 
