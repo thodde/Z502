@@ -178,7 +178,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             process_handle = os_make_process(name, priority, &error_response);
 
             if(process_handle != NULL) {
-                process_handle->priority = priority;
+                SystemCallData->Argument[3] = process_handle->pid;
             }
             else {
                 SystemCallData->Argument[4] = error_response;
