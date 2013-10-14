@@ -156,10 +156,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         case SYSNUM_TERMINATE_PROCESS:
             // Search for the process ID that was passed in
             process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
-            INT32 process_node_pid = process_node->data->pid;
 
             // If we found the process, destroy it
             if(process_node != NULL) {
+                INT32 process_node_pid = process_node->data->pid;
                 remove_from_list(process_list, process_node->data);
                 os_destroy_process(process_node->data);
 
@@ -202,20 +202,26 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         case SYSNUM_GET_PROCESS_ID:
             name = (char *)SystemCallData->Argument[0];
 
-            // search the process queue for the process id
-            process_node = search_for_name(process_list, name);
-
-            // we got it!
-            if (process_node != NULL) {
-                name = process_node->data->name;
-                SystemCallData->Argument[4] = ERR_SUCCESS;
+            printf("HERE\n");
+            if (strcmp(name, "") == 0) {
+                //return pid of calling process
+                SystemCallData->Argument[1] = current_PCB->pid;
+                SystemCallData->Argument[2] = ERR_SUCCESS;
             }
             else {
-                // no matching process name found
-                SystemCallData->Argument[4] = ERR_BAD_PARAM;
-                break;
-            }
+                // search the process queue for the process id
+                process_node = search_for_name(process_list, name);
 
+                // we got it!
+                if (process_node != NULL) {
+                    SystemCallData->Argument[1] = process_node->data->pid;
+                    SystemCallData->Argument[2] = ERR_SUCCESS;
+                }
+                else {
+                    // no matching process name found
+                    SystemCallData->Argument[2] = ERR_BAD_PARAM;
+                }
+            }
             break;
 
         default:
@@ -294,7 +300,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         *error = ERR_BAD_PARAM;
         return NULL;
     }
-    printf("Current size: %i\n", get_length(process_list));
+
     if (get_length(process_list) >= MAX_PROCESSES) {
         *error = ERR_BAD_PARAM;
         return NULL;
