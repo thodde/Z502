@@ -48,8 +48,15 @@ int add_to_list( LinkedList l, PCB* p) {
 
     //this is not an ordered list right now
     Node *new_node = (Node*) calloc (1, sizeof(Node));
-    new_node->next = prev->next;
-    prev->next = new_node;
+    if (prev == NULL) {
+        new_node->next = cursor->next;
+        cursor->next = new_node;
+    }
+    else {
+        new_node->next = prev->next;
+        prev->next = new_node;
+
+    }
     new_node->data = p;
 
 
@@ -88,6 +95,9 @@ BOOL remove_from_list(LinkedList l, PCB* p) {
 int get_length(LinkedList l) {
     int length = 0;
     Node *cursor = l;
+
+    if (cursor->data == NULL)
+        return length;
 
     while( cursor != NULL ){
         cursor = cursor->next;
