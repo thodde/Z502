@@ -179,3 +179,32 @@ PCB* search_by_parent(LinkedList l, INT32 pid) {
     }
     return NULL;
 }
+
+
+/**
+ *  After pulling off a node we'll need to call free_ready_queue to safely return the memory
+ */
+LinkedList build_ready_queue(LinkedList l) {
+    LinkedList ready_queue = create_list();
+
+    Node *cursor = l;
+
+    while (cursor != NULL) {
+        if (cursor->data != NULL) {
+            //TODO implied that we clear the delay after a timer has been set and fired and return by the hardware
+            if ((cursor->data->state == CREATE) || (cursor->data->state == READY) || (cursor->data->state == RUNNING)) {
+                add_to_list(ready_queue, cursor->data);
+            }
+        }
+    }
+
+    return ready_queue;
+}
+
+/**
+ *  We need to destroy the Node* object, but leave the PCB alone
+ */
+void free_ready_queue(LinkedList l) {
+    while (l->data != NULL)
+        remove_from_list(l, l->data->pid);
+}
