@@ -34,6 +34,7 @@ typedef struct {
     INT32   mode;
     INT32   priority;
     void*   context;
+    long    time_spent_processing;
 } PCB;
 
 typedef void* func_ptr;

@@ -48,6 +48,7 @@ LinkedList         ready_queue;            // Holds all processes that are curre
 LinkedList         process_list;           // Holds all processes that exist
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
+INT32              last_context_switch = 0;  // the number of ticks since the last context switch
 
 
 BOOL interrupt_lock = TRUE;
@@ -216,6 +217,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             MEM_READ( Z502TimerStatus, &current_time);
             current_PCB->delay = SystemCallData->Argument[0];
             start_timer();
+            switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
             break;
 
         case SYSNUM_CREATE_PROCESS:
@@ -406,6 +408,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point
     pcb->pid = gen_pid;                             // assign pid
     gen_pid++;
     pcb->state=CREATE;
+    pcb->time_spent_processing = 0;
 
     memset(pcb->name, 0, MAX_NAME);                 // assign process name
     strcpy(pcb->name, name);                        // assign process name
@@ -488,7 +491,7 @@ void dispatcher() {
                 PCB* process_to_run = ready_queue->data;
                 process_to_run->state = RUNNING;
                 free_ready_queue(ready_queue);
-                printf("found live node, switching to process '%s' with pid '%i'\n", process_to_run->name, process_to_run->pid);
+                printf("found live node, switching to process '%s' with pid '%i' and running time '%ld'\n", process_to_run->name, process_to_run->pid, process_to_run->time_spent_processing);
                 switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
             }
             else {
@@ -508,12 +511,18 @@ void dispatcher() {
  * Switches contexts for the current PCB
 **********************************************************/
 void switch_context( PCB* pcb, short context_mode) {
+    INT32 current_time;
+    MEM_READ(Z502ClockStatus, &current_time);
+
     if (current_PCB != NULL) {
-        if (current_PCB->state == RUNNING)
+        if (current_PCB->state == RUNNING) {
+            current_PCB->time_spent_processing += (current_time - last_context_switch);
             current_PCB->state = READY;
+        }
     }
 	current_PCB = pcb;
     current_PCB -> state = RUNNING;      //update the PCB state to RUN
+    last_context_switch = current_time;
 
     Z502SwitchContext( context_mode, &(pcb->context));
 }
