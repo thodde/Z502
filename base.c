@@ -82,30 +82,40 @@ void    interrupt_handler( void ) {
 
     switch(device_id) {
         case(TIMER_INTERRUPT):
-            printf("Timer interrupt\n");
             MEM_READ(Z502ClockStatus, &Time);
 
-            if (timer_queue == NULL)
+            if (timer_queue == NULL) {
                 printf("Error!  no PCBs are on the timer queue\n");
+                return;
+            }
+            if (timer_queue->data == NULL) {
+                printf("Error!  no PCBs are on the timer queue\n");
+                return;
+            }
+            PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
+            printf("Waking process: %s\n", waking_process->name);
+            waking_process->state = READY;
+
+            //add the next one to the queue
+            if (get_length(timer_queue > 0)) {
+                printf("adding next node\n");
+                MEM_WRITE(Z502InterruptClear, &Index );
+                MEM_WRITE(Z502TimerStart, &(timer_queue->data->delay));
+            }
             else {
-                if (timer_queue->data == NULL) {
-                    printf("Error!  no PCBs are on the timer queue\n");
-                }
-                else {
-                    PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
-                    printf("Waking process: %s\n", waking_process->name);
-                    waking_process->state = READY;
-                }
+                printf("no more nodes to add?\n");
+                MEM_WRITE(Z502InterruptClear, &Index );
+                interrupt_lock = FALSE;
             }
 
-            // Remove current_PCB from timer queue
-            interrupt_lock = FALSE;
+            break;
 
+        default:
+            MEM_WRITE(Z502InterruptClear, &Index );
             break;
     }
 
     // Clear out this device - we're done with it
-    MEM_WRITE(Z502InterruptClear, &Index );
 }                                       /* End of interrupt_handler */
 
 /************************************************************************
@@ -451,7 +461,7 @@ void dispatcher() {
     int i = 0;
     while (TRUE) {
         i++;
-        if (i > 10) {
+        if (i > 100) {
             printf("limiting to %i iterations before forced quit\n", i);
             Z502Halt();
         }
@@ -545,10 +555,12 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid) {
 }
 
 void start_timer() {
+
     INT32 status;
     add_to_list(timer_queue, current_PCB);
     current_PCB->state = SLEEPING;
-    MEM_WRITE(Z502TimerStart, &current_PCB->delay);
+    printf("sleeping for delay: %ld\n", current_PCB->delay);
+    MEM_WRITE(Z502TimerStart, &timer_queue->data->delay);
 }
 
 // This will be needed later
