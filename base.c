@@ -463,7 +463,7 @@ void dispatcher() {
     int i = 0;
     while (TRUE) {
         i++;
-        if (i > 100) {
+        if (i > 1000) {
             printf("limiting to %i iterations before forced quit\n", i);
             Z502Halt();
         }
