@@ -196,6 +196,7 @@ LinkedList build_ready_queue(LinkedList l) {
                 add_to_list(ready_queue, cursor->data);
             }
         }
+        cursor = cursor->next;
     }
 
     return ready_queue;

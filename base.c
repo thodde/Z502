@@ -38,15 +38,16 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 
 extern void          *TO_VECTOR [];
 
+
 // for keeping track of the current pid
 INT32 gen_pid = 1;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
+PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         ready_queue;            // Holds all processes that are currently waiting to be run
 LinkedList         process_list;          // Holds all processes that are currently running
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
-INT32              error_response;
 
 
 BOOL interrupt_lock = TRUE;
@@ -69,7 +70,7 @@ void    interrupt_handler( void ) {
     INT32              Index = 0;
     INT32              Time;
 
-    printf("GOT CALLED!!\n");
+    printf("INTERRUPT HANDLER GOT CALLED!!\n");
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -80,9 +81,25 @@ void    interrupt_handler( void ) {
 
     switch(device_id) {
         case(TIMER_INTERRUPT):
+            printf("Timer interrupt\n");
             MEM_READ(Z502ClockStatus, &Time);
+
+            if (timer_queue == NULL)
+                printf("Error!  no PCBs are on the timer queue\n");
+            else {
+                if (timer_queue->data == NULL) {
+                    printf("Error!  no PCBs are on the timer queue\n");
+                }
+                else {
+                    PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
+                    printf("Waking process: %s\n", waking_process->name);
+                    waking_process->state = READY;
+                }
+            }
+
             // Remove current_PCB from timer queue
             interrupt_lock = FALSE;
+
             break;
     }
 
@@ -156,25 +173,20 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
         case SYSNUM_TERMINATE_PROCESS:
             if (SystemCallData->Argument[0] == -1) {
-                //TODO kill self
-                //INT32 process_node_pid = current_pcb->pid;
+                *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                current_PCB->state = TERMINATE;
+                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
             }
-            else if (SystemCallData->Argument[0] == -2) {
-                //kill self and all of children
+            else if (SystemCallData->Argument[0] == -2) {            //kill self and all of children
                 PCB* process_pcb = search_for_pid(process_list, current_PCB->pid);
                 if(process_pcb != NULL) {
-                    INT32 process_node_pid = process_pcb->pid;
-                    pcb_cascade_delete_by_parent(process_node_pid);
-                    PCB *killedNode = remove_from_list(process_list, process_pcb->pid);
-                    os_destroy_process(killedNode);
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
-                    if (process_node_pid == 1) {
-                        Z502Halt();
-                    }
+                    process_pcb->state = TERMINATE;
+                    pcb_cascade_delete_by_parent(process_pcb->pid);
+                    switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
                 }
                 else {
-                    // If the process was not found, return an error
-                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;  // If the process was not found, return an error
                 }
             }
             else {
@@ -182,31 +194,28 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
                 // If we found the process, destroy it
                 if(process_handle != NULL) {
-                    INT32 process_pid = process_handle->pid;
-                    PCB* killedNode = remove_from_list(process_list, process_handle->pid);
-
-                    os_destroy_process(killedNode);
-
-                    // The root process ID is always 1, so check to see if the
-                    // root process is getting killed. If so, call Z502Halt()
-                    // because we are finished
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
-                    if (process_pid == 1) {
-                        Z502Halt();
-                    }
+                    process_handle->state = TERMINATE;
+                    //TODO this should possibly go to the process_handler more often than just if you are killing the root process
+                    //if (process_handle->pid == root_process_pcb->pid) {
+                    switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+                    //}
                 }
                 else {
                     // If the process was not found, return an error
                     *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
                 }
             }
+            // TODO really I should just switch to the root process only if the current process is killed, because a true scheduler
+            // will delete the processes the next time there is a switch.  But as this isn't ready yet, I need to put in
+            // checks to see if this is needed.
             break;
 
         case SYSNUM_SLEEP:
             MEM_READ( Z502TimerStatus, &current_time);
             current_PCB->delay = SystemCallData->Argument[0];
             start_timer();
-            dispatcher(TRUE);
+            dispatcher();
             break;
 
         case SYSNUM_CREATE_PROCESS:
@@ -258,12 +267,16 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 ************************************************************************/
 
 void    osInit( int argc, char *argv[]  ) {
-    void                *next_context;
-    INT32               i;
+    INT32 error_response;
+    void  *next_context;
+    INT32 i;
 
-    PCB* root_process;
+    PCB* test_process;
     timer_queue = create_list();
     process_list = create_list();
+
+    root_process_pcb = os_make_process("root", DEFAULT_PRIORITY, &error_response);
+    Z502MakeContext(&root_process_pcb->context, (void*) dispatcher, KERNEL_MODE);
 
     /* Demonstrates how calling arguments are passed thru to here       */
 
@@ -282,44 +295,44 @@ void    osInit( int argc, char *argv[]  ) {
     /*  Determine if the switch was set, and if so go to demo routine.  */
 
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
-        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &root_process->context, (void*) sample_code, KERNEL_MODE );
-        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) sample_code, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
     }                   /* This routine should never return!!           */
     else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &root_process->context, (void*) test0, KERNEL_MODE );
-        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test0, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1a runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &root_process->context, (void*) test1a, KERNEL_MODE );
-        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test1a, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1b" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1b runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &root_process->context, (void*) test1b, KERNEL_MODE );
-        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test1b, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1c" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1c runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &root_process->context, (void*) test1c, KERNEL_MODE );
-        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test1c, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1d" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test1c runs on a process recognized by the operating system.    */
-        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &root_process->context, (void*) test1d, KERNEL_MODE );
-        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test1d, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }
 }                                               // End of osInit
 
@@ -341,91 +354,136 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         return NULL;
     }
 
-    PCB* pcb = (PCB*) calloc(1, sizeof(PCB));    // allocate memory for PCB
+    PCB* pcb = (PCB*) calloc(1, sizeof(PCB));       // allocate memory for PCB
 
-    pcb->delay = 0;                                        // start time = now (zero)
-    pcb->pid = gen_pid;                                    // assign pid
+    pcb->delay = 0;                                 // start time = now (zero)
+    pcb->pid = gen_pid;                             // assign pid
     gen_pid++;
     pcb->state=CREATE;
 
-    memset(pcb->name, 0, MAX_NAME);                    // assign process name
-    strcpy(pcb->name, name);                             // assign process name
+    memset(pcb->name, 0, MAX_NAME);                 // assign process name
+    strcpy(pcb->name, name);                        // assign process name
 
     if (current_PCB != NULL)
-        pcb->parent = current_PCB->pid;                // assign parent id
+        pcb->parent = current_PCB->pid;             // assign parent id
+    else if (root_process_pcb != NULL)
+        pcb->parent = root_process_pcb->pid;        // no current process?  put it under the root process
     else
-        pcb->parent = -1;                               // -1 means this process is the parent process
+        pcb->parent = -1;                           // -1 means this process is the parent process
 
-    (*error) = ERR_SUCCESS;                           // return error value
+    (*error) = ERR_SUCCESS;                         // return error value
 
-    add_to_list(process_list, pcb);
+    if (pcb->parent != -1)                          // Add everything except the root process to the process_list
+        add_to_list(process_list, pcb);
 
     return pcb;
 }
 
-// Used for removing unneeded processes
+// Used for removing unneeded processes that have been marked for termination
 void os_destroy_process(PCB* pcb) {
-    //Z502DestroyContext(&(pcb->context));
+    if (current_PCB->pid != root_process_pcb->pid) { //only the root can destroy processes
+        printf("error, only root can destroy processes\n");
+        return;
+    }
+
+    Z502DestroyContext(&(pcb->context));
     free(pcb);
 }
 
-// This function is responsible for removing processes
-// from the ready queue and switching to their context
-// when they are available. It also adds processes
-// to the timer queue when they are sleeping
-void dispatcher(BOOL put_to_sleep) {
-    ready_queue = build_ready_queue(process_list);
+/**
+ *   This function is responsible for removing processes
+ *  from the ready queue and switching to their context
+ *  when they are available. It also adds processes
+ *  to the timer queue when they are sleeping
+ */
+void dispatcher() {
+    while (TRUE) {
+        // Check for terminated processes.
+        Node *cursor = process_list;
+        while (cursor != NULL) {
+            if (cursor->data != NULL) {
+                if (cursor->data->state == TERMINATE) {
+                    PCB* dead_process = remove_from_list(process_list, cursor->data->pid);
+                    os_destroy_process(dead_process);
+                    cursor = process_list->data;
+                }
+                else
+                    cursor = cursor->next;
+            }
+            else
+                cursor = cursor->next;
+        }
 
-    if(ready_queue != NULL) {
-        if(ready_queue->data != NULL) {
-            PCB* process_to_run = ready_queue->data;
-            process_to_run->state = RUNNING;
-            switch_context(process_to_run, SWITCH_CONTEXT_KILL_MODE);
-            free_ready_queue(ready_queue);
+        if (get_length(process_list) == 0) {        //If no active processes then halt
+            printf("No active processes, halting\n");
+            Z502Halt();
         }
-        else {
-            free_ready_queue(ready_queue);
+        else
+            printf("there are %i processes\n", get_length(process_list));
+
+        if (root_process_pcb->state == TERMINATE) {
+            printf("Root processed killed.  halting\n");
+            Z502Halt();
+        }
+
+        ready_queue = build_ready_queue(process_list);
+
+        if(ready_queue != NULL) {
+            if(ready_queue->data != NULL) {
+                PCB* process_to_run = ready_queue->data;
+                process_to_run->state = RUNNING;
+                free_ready_queue(ready_queue);
+                switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
+            }
+            else {
+                printf("no nodes are available to run...sleeping\n");
+                free_ready_queue(ready_queue);
+                Z502Idle();
+            }
+        }
+        else
             Z502Idle();
-        }
     }
-    else
-        Z502Idle();
+    printf("Error, I should never ever ever get here\n");
+    Z502Halt();
 }
 
 /*********************************************************
  * Switches contexts for the current PCB
 **********************************************************/
 void switch_context( PCB* pcb, short context_mode) {
+    if (current_PCB != NULL) {
+        if (current_PCB->state == RUNNING)
+            current_PCB->state = READY;
+    }
 	current_PCB = pcb;
     current_PCB -> state = RUNNING;      //update the PCB state to RUN
-    printf("HERE\n");
-	Z502SwitchContext( context_mode, &current_PCB->context );
-    printf("HERE 2\n");
+
+    Z502SwitchContext( context_mode, &(pcb->context));
 }
 
+/**
+ *   Recursively find all children and mark them for termination
+ */
 void pcb_cascade_delete_by_parent(INT32 parent_pid) {
-    PCB* child_node = search_by_parent(process_list, parent_pid);
+    Node *cursor = process_list;
+    while (cursor != NULL) {
+        if (cursor->data != NULL) {
+            if(cursor->data->parent == parent_pid) {
+                cursor->data->state = TERMINATE;
+                pcb_cascade_delete_by_parent(cursor->data->pid);
+            }
+        }
 
-    while (child_node != NULL) {
-        pcb_cascade_delete_by_parent(child_node->pid);
-        remove_from_list(process_list, child_node->pid);
-        os_destroy_process(child_node);
-
-        child_node = search_by_parent(process_list, parent_pid);
+        cursor = cursor->next;
     }
 }
 
 void start_timer() {
     INT32 status;
-    MEM_READ(Z502ClockStatus, &status);
-
-    add_to_list(&timer_queue, current_PCB);
+    add_to_list(timer_queue, current_PCB);
     current_PCB->state = SLEEPING;
     MEM_WRITE(Z502TimerStart, &current_PCB->delay);
-    MEM_READ(Z502TimerStatus, &status);
-    //Z502Idle();
-
-    MEM_READ(Z502ClockStatus, &status);
 }
 
 // This will be needed later

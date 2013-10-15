@@ -41,6 +41,9 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error);
 void os_destroy_process(PCB* pcb);
 void switch_context( PCB* pcb, short context_mode);
 void pcb_cascade_delete_by_parent(INT32 parent_pid);
-void dispatcher(BOOL put_to_sleep);
+void dispatcher(void);
+
+
+
 
 #endif
