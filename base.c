@@ -43,7 +43,7 @@ INT32 gen_pid = 1;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         ready_queue;            // Holds all processes that are currently waiting to be run
-LinkedList         process_list;          // Holds all processes that are currently running
+LinkedList         process_list;           // Holds all processes that exist
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              error_response;
@@ -68,8 +68,6 @@ void    interrupt_handler( void ) {
     INT32              status;
     INT32              Index = 0;
     INT32              Time;
-
-    printf("GOT CALLED!!\n");
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -148,7 +146,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         do_print--;
     }
 
-    //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
     switch(call_type) {
         case SYSNUM_GET_TIME_OF_DAY:
             MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
@@ -365,6 +362,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 
 // Used for removing unneeded processes
 void os_destroy_process(PCB* pcb) {
+    // TODO This function needs to switch to a different context before destroying the current context
     //Z502DestroyContext(&(pcb->context));
     free(pcb);
 }
@@ -380,7 +378,7 @@ void dispatcher(BOOL put_to_sleep) {
         if(ready_queue->data != NULL) {
             PCB* process_to_run = ready_queue->data;
             process_to_run->state = RUNNING;
-            switch_context(process_to_run, SWITCH_CONTEXT_KILL_MODE);
+            switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
             free_ready_queue(ready_queue);
         }
         else {
