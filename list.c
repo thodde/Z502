@@ -99,7 +99,7 @@ PCB* remove_from_list(LinkedList l, INT32 pid) {
             l->data = next->data;
             l->next = next->next;
             // avoid memory leaks!
-            free(l->next);
+            //free(l->next);
         }
         return returnVal;
     }

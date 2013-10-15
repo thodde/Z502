@@ -196,6 +196,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 if(process_handle != NULL) {
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
                     process_handle->state = TERMINATE;
+
                     //TODO this should possibly go to the process_handler more often than just if you are killing the root process
                     //if (process_handle->pid == root_process_pcb->pid) {
                     switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
@@ -219,13 +220,24 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
         case SYSNUM_CREATE_PROCESS:
             name = (char *)SystemCallData->Argument[0];
-            addr = SystemCallData->Argument[1];
+            addr = (void*) SystemCallData->Argument[1];
             priority = (int)SystemCallData->Argument[2];
-            process_handle = os_make_process(name, priority, SystemCallData->Argument[4]);
 
-            if(process_handle != NULL) {
-                *(SystemCallData->Argument[3]) = process_handle->pid;
+            if (addr == NULL) {
+                printf("Error, function handle not recognized: %s\n", SystemCallData->Argument[1]);
+                *(SystemCallData->Argument[4]) = ERR_BAD_PARAM;
             }
+            else {
+                process_handle = os_make_process(name, priority, SystemCallData->Argument[4], addr, KERNEL_MODE);
+
+                if(process_handle != NULL) {
+                    *(SystemCallData->Argument[4]) = ERR_SUCCESS;
+                    *(SystemCallData->Argument[3]) = process_handle->pid;
+                }
+                else
+                    *(SystemCallData->Argument[4]) = ERR_BAD_PARAM;
+            }
+
 
             break;
 
@@ -333,8 +345,7 @@ void    osInit( int argc, char *argv[]  ) {
     timer_queue = create_list();
     process_list = create_list();
 
-    root_process_pcb = os_make_process("root", DEFAULT_PRIORITY, &error_response);
-    Z502MakeContext(&root_process_pcb->context, (void*) dispatcher, KERNEL_MODE);
+    root_process_pcb = os_make_process("root", DEFAULT_PRIORITY, &error_response, (void*) dispatcher, KERNEL_MODE);
 
     /* Demonstrates how calling arguments are passed thru to here       */
 
@@ -353,62 +364,25 @@ void    osInit( int argc, char *argv[]  ) {
     /*  Determine if the switch was set, and if so go to demo routine.  */
 
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) sample_code, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, (void*) sample_code, KERNEL_MODE);
+        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
     }                   /* This routine should never return!!           */
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test0 runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test0, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
-    }
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test1a runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test1a, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
-    }
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test1b" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test1b runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test1b, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
-    }
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test1c" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test1c runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test1c, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
-    }
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test1d" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test1c runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test1d, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
-    }
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test1e" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test1c runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test1e, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
-    }
-    else if (( argc > 1 ) && ( strcmp( argv[1], "test1f" ) == 0 ) ) {
-        /*  This should be done by a "os_make_process" routine, so that
-        test1c runs on a process recognized by the operating system.    */
-        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
-        Z502MakeContext( &test_process->context, (void*) test1f, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
+    else {
+        void* func;
+        func = (void*) get_function_handle(argv[1]);
+        printf("Function: %s address1 : (%ld, %ld) address2: (%ld, %ld)\n", argv[1], &func, func, &test1a, test1a);
+
+        if (func != NULL) {
+                test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, KERNEL_MODE);
+                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+        }
+        else {
+            printf("Error!  Unrecognized entry point!\n");
+        }
     }
 }                                               // End of osInit
 
-PCB* os_make_process(char* name, INT32 priority, INT32* error) {
+PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point, INT32 mode) {
     if ((priority < MIN_PRIORITY) || (priority > MAX_PRIORITY)) {
         *error = ERR_BAD_PARAM;
         return NULL;
@@ -448,6 +422,8 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
     if (pcb->parent != -1)                          // Add everything except the root process to the process_list
         add_to_list(process_list, pcb);
 
+    Z502MakeContext(&pcb->context, entry_point, mode );
+
     return pcb;
 }
 
@@ -458,7 +434,7 @@ void os_destroy_process(PCB* pcb) {
         return;
     }
 
-    Z502DestroyContext(&(pcb->context));
+    Z502DestroyContext(&pcb->context);
     free(pcb);
 }
 
@@ -472,12 +448,10 @@ void dispatcher() {
     int i = 0;
     while (TRUE) {
         i++;
-
         if (i > 10) {
             printf("limiting to %i iterations before forced quit\n", i);
             Z502Halt();
         }
-
 
         // Check for terminated processes.
         Node *cursor = process_list;
@@ -486,7 +460,7 @@ void dispatcher() {
                 if (cursor->data->state == TERMINATE) {
                     PCB* dead_process = remove_from_list(process_list, cursor->data->pid);
                     os_destroy_process(dead_process);
-                    cursor = process_list->data;
+                    cursor = process_list;
                 }
                 else
                     cursor = cursor->next;
@@ -514,7 +488,7 @@ void dispatcher() {
                 PCB* process_to_run = ready_queue->data;
                 process_to_run->state = RUNNING;
                 free_ready_queue(ready_queue);
-                printf("found live node, switching to context: %s %i\n", process_to_run->name, process_to_run->pid);
+                printf("found live node, switching to process '%s' with pid '%i'\n", process_to_run->name, process_to_run->pid);
                 switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
             }
             else {
@@ -571,4 +545,28 @@ void start_timer() {
 // This will be needed later
 void wait_for_interrupt() {
 
+}
+
+func_ptr get_function_handle(char *name) {
+    printf("looking for function handle with name: %s\n", name);
+    func_ptr response;
+    if (strcmp( name, "sample" ) == 0 )
+        response = (void*) sample_code;
+    else if ( strcmp( name, "test0" ) == 0 )
+        response = (void*) test0;
+    else if ( strcmp( name, "test1a" ) == 0 )
+        response = (void*) test1a;
+    else if ( strcmp( name, "test1b" ) == 0 )
+        response = (void*) test1b;
+    else if ( strcmp( name, "test1c" ) == 0 )
+        response = (void*) test1c;
+    else if ( strcmp( name, "test1d" ) == 0 )
+        response = (void*) test1d;
+    else if ( strcmp( name, "test1e" ) == 0 )
+        response = (void*) test1e;
+    else if ( strcmp( name, "test1f" ) == 0 )
+        response = (void*) test1f;
+    else
+        response = NULL;
+    return response;
 }

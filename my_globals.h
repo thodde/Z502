@@ -36,12 +36,16 @@ typedef struct {
     void*   context;
 } PCB;
 
+typedef void* func_ptr;
+
 //******** Function Prototypes *********//
-PCB* os_make_process(char* name, INT32 priority, INT32* error);
+PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point, INT32 mode);
 void os_destroy_process(PCB* pcb);
 void switch_context( PCB* pcb, short context_mode);
 void pcb_cascade_delete_by_parent(INT32 parent_pid);
 void dispatcher(void);
 void start_timer();
+//void get_function_handle(char *name, void** ptr);
+func_ptr get_function_handle(char *name);
 
 #endif
