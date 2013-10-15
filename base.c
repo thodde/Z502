@@ -97,20 +97,21 @@ void    interrupt_handler( void ) {
             waking_process->state = READY;
 
             //add the next one to the queue
-            if (get_length(timer_queue > 0)) {
-                printf("adding next node\n");
-                MEM_WRITE(Z502InterruptClear, &Index );
+            if (get_length(timer_queue) == 0) {
+                interrupt_lock = FALSE;
+            }
+
+            if (get_length(timer_queue) > 0) {
                 MEM_WRITE(Z502TimerStart, &(timer_queue->data->delay));
             }
             else {
-                printf("no more nodes to add?\n");
                 MEM_WRITE(Z502InterruptClear, &Index );
-                interrupt_lock = FALSE;
             }
 
             break;
 
         default:
+            printf("Unrecognized interrupt\n");
             MEM_WRITE(Z502InterruptClear, &Index );
             break;
     }
@@ -446,6 +447,7 @@ void os_destroy_process(PCB* pcb) {
         printf("error, only root can destroy processes\n");
         return;
     }
+    remove_from_list(timer_queue, pcb->pid);
 
     Z502DestroyContext(&pcb->context);
     free(pcb);
@@ -472,6 +474,7 @@ void dispatcher() {
             if (cursor->data != NULL) {
                 if (cursor->data->state == TERMINATE) {
                     PCB* dead_process = remove_from_list(process_list, cursor->data->pid);
+                    printf("dead process: %s %i\n", dead_process->name, dead_process->pid);
                     os_destroy_process(dead_process);
                     cursor = process_list;
                 }
@@ -530,8 +533,9 @@ void switch_context( PCB* pcb, short context_mode) {
             current_PCB->state = READY;
         }
     }
+
 	current_PCB = pcb;
-    current_PCB -> state = RUNNING;      //update the PCB state to RUN
+    pcb->state = RUNNING;      //update the PCB state to RUN
     last_context_switch = current_time;
 
     Z502SwitchContext( context_mode, &(pcb->context));
