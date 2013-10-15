@@ -179,12 +179,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 }
             }
             else {
-                process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
+                process_handle = search_for_pid(process_list, SystemCallData->Argument[0]);
 
                 // If we found the process, destroy it
-                if(process_node != NULL) {
-                    INT32 process_node_pid = process_node->data->pid;
-                    PCB *killedNode = remove_from_list(process_list, process_node->data->pid);
+                if(process_handle != NULL) {
+                    INT32 process_pid = process_handle->pid;
+                    PCB* killedNode = remove_from_list(process_list, process_handle->pid);
 
                     os_destroy_process(killedNode);
 
@@ -192,7 +192,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     // root process is getting killed. If so, call Z502Halt()
                     // because we are finished
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
-                    if (process_node_pid == 1) {
+                    if (process_pid == 1) {
                         Z502Halt();
                     }
                 }
@@ -231,11 +231,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
             else {
                 // search the process queue for the process id
-                process_node = search_for_name(process_list, name);
+                process_handle = search_for_name(process_list, name);
 
                 // we got it!
-                if (process_node != NULL) {
-                    *(SystemCallData->Argument[1]) = process_node->data->pid;
+                if (process_handle != NULL) {
+                    *(SystemCallData->Argument[1]) = process_handle->pid;
                     *(SystemCallData->Argument[2]) = ERR_SUCCESS;
                 }
                 else {
@@ -328,8 +328,8 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
         return NULL;
     }
 
-    Node* tmp_node = search_for_name(process_list, name);
-    if (tmp_node != NULL) {
+    PCB* process_handle = search_for_name(process_list, name);
+    if (process_handle != NULL) {
         *error = ERR_BAD_PARAM;
         return NULL;
     }
@@ -358,18 +358,9 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 
 // Used for removing unneeded processes
 void os_destroy_process(PCB* pcb) {
-    //this needs to be more complicated than this...
-    if (pcb == NULL)
-        printf("But PCB is null!\n");
-    else
-        printf("PCB is still good: %ld\n", pcb->pid);
-    printf("Do I get here 1?\n");
-    //Z502DestroyContext(pcb->context);
-    printf("Do I get here 2?\n");
+    //Z502DestroyContext(&(pcb->context));
     remove_from_list(process_list, pcb);
-    printf("Do I get here 3?\n");
     free(pcb);
-    printf("Do I get here 4?\n");
 }
 
 /*********************************************************

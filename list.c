@@ -132,7 +132,7 @@ int get_length(LinkedList l) {
     return length;
 }
 
-Node* search_for_pid(LinkedList l, INT32 pid) {
+PCB* search_for_pid(LinkedList l, INT32 pid) {
     Node* cursor = l;
 
     if (l->data == NULL) {
@@ -141,14 +141,14 @@ Node* search_for_pid(LinkedList l, INT32 pid) {
 
     while(cursor != NULL) {
         if (cursor->data->pid == pid) {
-            return cursor;
+            return cursor->data;
         }
         cursor = cursor->next;
     }
     return NULL;
 }
 
-Node* search_for_name(LinkedList l, char* name) {
+PCB* search_for_name(LinkedList l, char* name) {
     Node* cursor = l;
 
     if (l->data == NULL) {
@@ -157,7 +157,23 @@ Node* search_for_name(LinkedList l, char* name) {
 
     while(cursor != NULL) {
         if (strcmp(cursor->data->name, name) == 0) {
-            return cursor;
+            return cursor->data;
+        }
+        cursor = cursor->next;
+    }
+    return NULL;
+}
+
+PCB* search_by_parent(LinkedList l, INT32 pid) {
+    Node* cursor = l;
+
+    if (l->data == NULL) {
+        return NULL;
+    }
+
+    while(cursor != NULL) {
+        if (cursor->data->parent == pid) {
+            return cursor->data;
         }
         cursor = cursor->next;
     }
