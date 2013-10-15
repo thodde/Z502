@@ -215,7 +215,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             MEM_READ( Z502TimerStatus, &current_time);
             current_PCB->delay = SystemCallData->Argument[0];
             start_timer();
-            dispatcher();
             break;
 
         case SYSNUM_CREATE_PROCESS:
@@ -356,14 +355,14 @@ void    osInit( int argc, char *argv[]  ) {
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
         test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &test_process->context, (void*) sample_code, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }                   /* This routine should never return!!           */
     else if (( argc > 1 ) && ( strcmp( argv[1], "test0" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
         test0 runs on a process recognized by the operating system.    */
         test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &test_process->context, (void*) test0, KERNEL_MODE );
-        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }
     else if (( argc > 1 ) && ( strcmp( argv[1], "test1a" ) == 0 ) ) {
         /*  This should be done by a "os_make_process" routine, so that
@@ -470,7 +469,16 @@ void os_destroy_process(PCB* pcb) {
  *  to the timer queue when they are sleeping
  */
 void dispatcher() {
+    int i = 0;
     while (TRUE) {
+        i++;
+
+        if (i > 10) {
+            printf("limiting to %i iterations before forced quit\n", i);
+            Z502Halt();
+        }
+
+
         // Check for terminated processes.
         Node *cursor = process_list;
         while (cursor != NULL) {
@@ -488,7 +496,7 @@ void dispatcher() {
         }
 
         if (get_length(process_list) == 0) {        //If no active processes then halt
-            printf("No active processes, halting\n");
+            printf("No processes exist other than root, halting\n");
             Z502Halt();
         }
         else
@@ -506,6 +514,7 @@ void dispatcher() {
                 PCB* process_to_run = ready_queue->data;
                 process_to_run->state = RUNNING;
                 free_ready_queue(ready_queue);
+                printf("found live node, switching to context: %s %i\n", process_to_run->name, process_to_run->pid);
                 switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
             }
             else {
