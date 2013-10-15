@@ -160,7 +160,23 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
             else if (SystemCallData->Argument[0] == -2) {
                 //TODO kill self and all of children
+                process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
 
+                // If we found the process, destroy it
+                if(process_node != NULL) {
+                    INT32 process_node_pid = process_node->data->pid;
+                    pcb_cascade_delete_by_parent(process_node_pid);
+                    PCB *killedNode = remove_from_list(process_list, process_node->data->pid);
+                    os_destroy_process(killedNode);
+                    *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                    if (process_node_pid == 1) {
+                        Z502Halt();
+                    }
+                }
+                else {
+                    // If the process was not found, return an error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
             }
             else {
                 process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
@@ -363,6 +379,18 @@ void switch_context( PCB* pcb, short context_mode) {
 	current_PCB = pcb;
     current_PCB -> state = RUN;      //update the PCB state to RUN
 	Z502SwitchContext( context_mode, &current_PCB->context );
+}
+
+void pcb_cascade_delete_by_parent(INT32 parent_pid) {
+    PCB* child_node = search_by_parent(process_list, parent_pid);
+
+    while (child_node != NULL) {
+        pcb_cascade_delete_by_parent(child_node->pid);
+        remove_from_list(process_list, child_node);
+        os_destroy_process(child_node);
+
+        child_node = search_by_parent(process_list, parent_pid);
+    }
 }
 
 void start_timer() {
