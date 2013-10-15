@@ -42,6 +42,7 @@ extern void          *TO_VECTOR [];
 INT32 gen_pid = 1;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
+LinkedList         ready_queue;            // Holds all processes that are currently waiting to be run
 LinkedList         process_list;          // Holds all processes that are currently running
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
@@ -205,6 +206,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             MEM_READ( Z502TimerStatus, &current_time);
             current_PCB->delay = SystemCallData->Argument[0];
             start_timer();
+            dispatcher(TRUE);
             break;
 
         case SYSNUM_CREATE_PROCESS:
@@ -312,6 +314,13 @@ void    osInit( int argc, char *argv[]  ) {
         Z502MakeContext( &root_process->context, (void*) test1c, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1d" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1c runs on a process recognized by the operating system.    */
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &root_process->context, (void*) test1d, KERNEL_MODE );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+    }
 }                                               // End of osInit
 
 PCB* os_make_process(char* name, INT32 priority, INT32* error) {
@@ -360,13 +369,38 @@ void os_destroy_process(PCB* pcb) {
     free(pcb);
 }
 
+// This function is responsible for removing processes
+// from the ready queue and switching to their context
+// when they are available. It also adds processes
+// to the timer queue when they are sleeping
+void dispatcher(BOOL put_to_sleep) {
+    ready_queue = build_ready_queue(process_list);
+
+    if(ready_queue != NULL) {
+        if(ready_queue->data != NULL) {
+            PCB* process_to_run = ready_queue->data;
+            process_to_run->state = RUNNING;
+            switch_context(process_to_run, SWITCH_CONTEXT_KILL_MODE);
+            free_ready_queue(ready_queue);
+        }
+        else {
+            free_ready_queue(ready_queue);
+            Z502Idle();
+        }
+    }
+    else
+        Z502Idle();
+}
+
 /*********************************************************
  * Switches contexts for the current PCB
 **********************************************************/
 void switch_context( PCB* pcb, short context_mode) {
 	current_PCB = pcb;
-    current_PCB -> state = RUN;      //update the PCB state to RUN
+    current_PCB -> state = RUNNING;      //update the PCB state to RUN
+    printf("HERE\n");
 	Z502SwitchContext( context_mode, &current_PCB->context );
+    printf("HERE 2\n");
 }
 
 void pcb_cascade_delete_by_parent(INT32 parent_pid) {
@@ -384,17 +418,14 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid) {
 void start_timer() {
     INT32 status;
     MEM_READ(Z502ClockStatus, &status);
-    printf("Current time is: %i\n", status);
 
     add_to_list(&timer_queue, current_PCB);
+    current_PCB->state = SLEEPING;
     MEM_WRITE(Z502TimerStart, &current_PCB->delay);
     MEM_READ(Z502TimerStatus, &status);
-    printf("Current status is: %i\n", status);
-    Z502Idle();
+    //Z502Idle();
 
     MEM_READ(Z502ClockStatus, &status);
-    printf("Current time is: %i\n", status);
-
 }
 
 // This will be needed later

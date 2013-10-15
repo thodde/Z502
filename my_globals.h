@@ -25,10 +25,6 @@
 #define         DEFAULT_PRIORITY    5
 #define         MAX_PRIORITY        10
 
-// Flags to determine whether or not to run a process upon creation
-#define         NOTRUN              0
-#define         RUN                 1
-
 typedef struct {
     INT32   pid;
     INT32   delay;
@@ -45,5 +41,6 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error);
 void os_destroy_process(PCB* pcb);
 void switch_context( PCB* pcb, short context_mode);
 void pcb_cascade_delete_by_parent(INT32 parent_pid);
+void dispatcher(BOOL put_to_sleep);
 
 #endif
