@@ -359,7 +359,6 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error) {
 // Used for removing unneeded processes
 void os_destroy_process(PCB* pcb) {
     //Z502DestroyContext(&(pcb->context));
-    remove_from_list(process_list, pcb);
     free(pcb);
 }
 
