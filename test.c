@@ -203,7 +203,7 @@ void test1b(void) {
 
     GET_TIME_OF_DAY(&Z502_REG4);
     printf("Test1b, PID %ld, Ends at Time %ld\n", Z502_REG2, Z502_REG4);
-    TERMINATE_PROCESS(-2, &Z502_REG9)
+    TERMINATE_PROCESS(-2, &Z502_REG9);
 
 }                                                  // End of test1b
 
