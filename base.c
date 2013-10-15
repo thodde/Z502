@@ -71,8 +71,6 @@ void    interrupt_handler( void ) {
     INT32              Index = 0;
     INT32              Time;
 
-    printf("INTERRUPT HANDLER GOT CALLED!!\n");
-
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
     // Set this device as target of our query
@@ -93,7 +91,7 @@ void    interrupt_handler( void ) {
                 return;
             }
             PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
-            printf("Waking process: %s\n", waking_process->name);
+            //printf("Waking process: %s\n", waking_process->name);
             waking_process->state = READY;
 
             //add the next one to the queue
@@ -320,7 +318,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             // Make sure we got a valid process
             if(process_handle != NULL) {
                 // Is the process running?
-                if(process_handle->state == SUSPEND) {
+                if(process_handle->state == RUNNING) {
+                    // Throw error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
+                else if(process_handle->state == READY) {
                     // Throw error
                     *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
                 }
@@ -375,7 +377,6 @@ void    osInit( int argc, char *argv[]  ) {
     TO_VECTOR[TO_VECTOR_TRAP_HANDLER_ADDR]  = (void *)svc;
 
     /*  Determine if the switch was set, and if so go to demo routine.  */
-
     if (( argc > 1 ) && ( strcmp( argv[1], "sample" ) == 0 ) ) {
         test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, (void*) sample_code, KERNEL_MODE);
         switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
@@ -383,7 +384,7 @@ void    osInit( int argc, char *argv[]  ) {
     else {
         void* func;
         func = (void*) get_function_handle(argv[1]);
-        printf("Function: %s address1 : (%ld, %ld) address2: (%ld, %ld)\n", argv[1], &func, func, &test1a, test1a);
+        //printf("Function: %s address1 : (%ld, %ld) address2: (%ld, %ld)\n", argv[1], &func, func, &test1a, test1a);
 
         if (func != NULL) {
                 test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, KERNEL_MODE);
@@ -454,7 +455,7 @@ void os_destroy_process(PCB* pcb) {
 }
 
 /**
- *   This function is responsible for removing processes
+ *  This function is responsible for removing processes
  *  from the ready queue and switching to their context
  *  when they are available. It also adds processes
  *  to the timer queue when they are sleeping
@@ -474,7 +475,7 @@ void dispatcher() {
             if (cursor->data != NULL) {
                 if (cursor->data->state == TERMINATE) {
                     PCB* dead_process = remove_from_list(process_list, cursor->data->pid);
-                    printf("dead process: %s %i\n", dead_process->name, dead_process->pid);
+                    //printf("dead process: %s %i\n", dead_process->name, dead_process->pid);
                     os_destroy_process(dead_process);
                     cursor = process_list;
                 }
@@ -486,14 +487,14 @@ void dispatcher() {
         }
 
         if (get_length(process_list) == 0) {        //If no active processes then halt
-            printf("No processes exist other than root, halting\n");
+            //printf("No processes exist other than root, halting\n");
             Z502Halt();
         }
         else
-            printf("there are %i processes\n", get_length(process_list));
+            //printf("there are %i processes\n", get_length(process_list));
 
         if (root_process_pcb->state == TERMINATE) {
-            printf("Root processed killed.  halting\n");
+            //printf("Root processed killed.  halting\n");
             Z502Halt();
         }
 
@@ -504,17 +505,17 @@ void dispatcher() {
                 PCB* process_to_run = ready_queue->data;
                 process_to_run->state = RUNNING;
                 free_ready_queue(ready_queue);
-                printf("found live node, switching to process '%s' with pid '%i' and running time '%ld'\n", process_to_run->name, process_to_run->pid, process_to_run->time_spent_processing);
+                //printf("found live node, switching to process '%s' with pid '%i' and running time '%ld'\n", process_to_run->name, process_to_run->pid, process_to_run->time_spent_processing);
                 switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
             }
             else {
-                printf("no nodes are available to run...sleeping\n");
+                //printf("no nodes are available to run...sleeping\n");
                 free_ready_queue(ready_queue);
-                Z502Idle();
+                CALL ( Z502Idle() );
             }
         }
         else
-            Z502Idle();
+            CALL ( Z502Idle() );
     }
     printf("Error, I should never ever ever get here\n");
     Z502Halt();
@@ -559,11 +560,10 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid) {
 }
 
 void start_timer() {
-
     INT32 status;
     add_to_list(timer_queue, current_PCB);
     current_PCB->state = SLEEPING;
-    printf("sleeping for delay: %ld\n", current_PCB->delay);
+    //printf("sleeping for delay: %ld\n", current_PCB->delay);
     MEM_WRITE(Z502TimerStart, &timer_queue->data->delay);
 }
 
@@ -573,7 +573,7 @@ void wait_for_interrupt() {
 }
 
 func_ptr get_function_handle(char *name) {
-    printf("looking for function handle with name: %s\n", name);
+    //printf("looking for function handle with name: %s\n", name);
     func_ptr response;
     if (strcmp( name, "sample" ) == 0 )
         response = (void*) sample_code;
