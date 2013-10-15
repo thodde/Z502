@@ -244,10 +244,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_SUSPEND_PROCESS:
-            tmp_pid = (int*)SystemCallData->Argument[0];;
+            tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
 
-            // More has to happen here -- we have to talk to the dispatcher and make sure
+            // TODO: More has to happen here -- we have to talk to the dispatcher and make sure
             // the schedule is updated and whatnot...
 
 
@@ -277,7 +277,29 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_RESUME_PROCESS:
-            // TODO: Implement
+            // TODO: Add dispatcher and scheduler stuff
+
+            tmp_pid = (int*)SystemCallData->Argument[0];
+            process_handle = search_for_pid(process_list, tmp_pid);
+
+            // Make sure we got a valid process
+            if(process_handle != NULL) {
+                // Is the process running?
+                if(process_handle->state == SUSPEND) {
+                    // Throw error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
+                else {
+                    process_handle->state = READY;
+                    add_to_list(ready_queue, process_handle);
+                    *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                }
+            }
+            else {
+                // The process does not exist
+                *SystemCallData->Argument[1] = ERR_BAD_PARAM;
+            }
+
             break;
 
         default:
