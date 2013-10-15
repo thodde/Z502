@@ -159,14 +159,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 //INT32 process_node_pid = current_pcb->pid;
             }
             else if (SystemCallData->Argument[0] == -2) {
-                //TODO kill self and all of children
-                process_node = search_for_pid(process_list, SystemCallData->Argument[0]);
-
-                // If we found the process, destroy it
-                if(process_node != NULL) {
-                    INT32 process_node_pid = process_node->data->pid;
+                //kill self and all of children
+                PCB* process_pcb = search_for_pid(process_list, current_PCB->pid);
+                if(process_pcb != NULL) {
+                    INT32 process_node_pid = process_pcb->pid;
                     pcb_cascade_delete_by_parent(process_node_pid);
-                    PCB *killedNode = remove_from_list(process_list, process_node->data->pid);
+                    PCB *killedNode = remove_from_list(process_list, process_pcb->pid);
                     os_destroy_process(killedNode);
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
                     if (process_node_pid == 1) {
@@ -376,7 +374,7 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid) {
 
     while (child_node != NULL) {
         pcb_cascade_delete_by_parent(child_node->pid);
-        remove_from_list(process_list, child_node);
+        remove_from_list(process_list, child_node->pid);
         os_destroy_process(child_node);
 
         child_node = search_by_parent(process_list, parent_pid);
