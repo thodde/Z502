@@ -385,6 +385,13 @@ void    osInit( int argc, char *argv[]  ) {
         Z502MakeContext( &root_process->context, (void*) test1e, KERNEL_MODE );
         switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
     }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1f" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1c runs on a process recognized by the operating system.    */
+        root_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &root_process->context, (void*) test1f, KERNEL_MODE );
+        switch_context(root_process, SWITCH_CONTEXT_KILL_MODE);
+    }
 }                                               // End of osInit
 
 PCB* os_make_process(char* name, INT32 priority, INT32* error) {
