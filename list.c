@@ -1,24 +1,34 @@
 #include "list.h"
 
+/**
+* Returns a linkedlist
+*/
 LinkedList create_list() {
+    // Create the first node
     LinkedList list = (LinkedList) calloc(1, sizeof(Node));
 
+    // In case we are out of memory, or something crazy happens...
     if (list == NULL) {
         printf("Could not create list...");
         return NULL;
     }
 
+    // Initialize node
     list->data = NULL;
     list->next = NULL;
     return list;
 }
 
+/**
+* Adds a process to a specified linked list
+*/
 int add_to_list( LinkedList l, PCB* p) {
+    // Make sure the list exists
     if (l == NULL) {
         return 0;
     }
 
-    if (l->data == NULL)  {
+    if (l->data == NULL) {
         // The list is empty, so add to the front
         l->data = p;
         l->next = NULL;
@@ -56,34 +66,27 @@ int add_to_list( LinkedList l, PCB* p) {
         prev->next = new_node;
 
     }
+
     new_node->data = p;
 
-
-
-//    LinkedList new_node = (LinkedList) calloc(1, sizeof(Node));
-//
-//    if (new_node == NULL) {
-//        printf("Could not create node...");
-//        return 0;
-//    }
-//
-//    new_node->data = p;
-//    new_node->next = l->next;
-//    l->next = new_node;
     return 1;
 }
 
+/**
+* Remove a process from the list using its pid
+*/
 PCB* remove_from_list(LinkedList l, INT32 pid) {
-    // iterate through the list until we find the appropriate spot to remove the node
-
+    // Make sure the specified list exists
     if (l == NULL) {
         return NULL;
     }
 
+    // Make sure the first node actually has data in it
     if (l->data == NULL) {
         return NULL;
     }
 
+    // Check to see if the pid we are looking for belongs to the first node in the list
     if (l->data->pid == pid) {
         PCB* returnVal = l->data;
         if (l->next == NULL) {
@@ -91,9 +94,11 @@ PCB* remove_from_list(LinkedList l, INT32 pid) {
             l->data = NULL;
         }
         else {
+            // We have to move some pointers around to account for the node removal
             Node *next = l->next;
             l->data = next->data;
             l->next = next->next;
+            // avoid memory leaks!
             free(l->next);
         }
         return returnVal;
@@ -102,7 +107,10 @@ PCB* remove_from_list(LinkedList l, INT32 pid) {
     Node *cursor = l;
     Node *prev = NULL;
 
+    // If we made it here, the pid was not found in the first node
+    // so we have to look through the remainder of the list
     while (cursor != NULL) {
+        // If we have found the pid, remove that node
         if (cursor->data->pid == pid) {
             prev->next = cursor->next;
             PCB* returnVal = cursor->data;
@@ -117,6 +125,9 @@ PCB* remove_from_list(LinkedList l, INT32 pid) {
     return NULL;
 }
 
+/**
+* Return the length of the list that is passed in
+*/
 int get_length(LinkedList l) {
     int length = 0;
     Node *cursor = l;
@@ -132,9 +143,14 @@ int get_length(LinkedList l) {
     return length;
 }
 
+/**
+* Search the list for the process whose pid
+* matches that of the passed in pid.
+*/
 PCB* search_for_pid(LinkedList l, INT32 pid) {
     Node* cursor = l;
 
+    // Make sure the list exists
     if (l->data == NULL) {
         return NULL;
     }
@@ -148,9 +164,14 @@ PCB* search_for_pid(LinkedList l, INT32 pid) {
     return NULL;
 }
 
+/**
+* Search the list for the process whose name
+* matches that of the passed in name.
+*/
 PCB* search_for_name(LinkedList l, char* name) {
     Node* cursor = l;
 
+    // Make sure the list exists
     if (l->data == NULL) {
         return NULL;
     }
@@ -164,9 +185,14 @@ PCB* search_for_name(LinkedList l, char* name) {
     return NULL;
 }
 
+/**
+* Search the list for the first child process
+* of the passed in pid.
+*/
 PCB* search_by_parent(LinkedList l, INT32 pid) {
     Node* cursor = l;
 
+    // Make sure the list exists
     if (l->data == NULL) {
         return NULL;
     }

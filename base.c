@@ -45,7 +45,7 @@ PCB                *current_PCB = NULL;    // this is the currently running PCB
 PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         ready_queue;            // Holds all processes that are currently waiting to be run
-LinkedList         process_list;          // Holds all processes that are currently running
+LinkedList         process_list;           // Holds all processes that exist
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 
@@ -152,6 +152,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     int                 priority;
     PCB*                process_handle;
     Node*               process_node;
+    INT32               tmp_pid;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     if ( do_print > 0 ) {
@@ -165,7 +166,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         do_print--;
     }
 
-    //TODO This needs to be figured out why everything is being executed in KERNEL_MODE
     switch(call_type) {
         case SYSNUM_GET_TIME_OF_DAY:
             MEM_READ(Z502ClockStatus, SystemCallData->Argument[0]);
@@ -254,6 +254,65 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             }
             break;
 
+        case SYSNUM_SUSPEND_PROCESS:
+            tmp_pid = (int*)SystemCallData->Argument[0];
+            process_handle = search_for_pid(process_list, tmp_pid);
+
+            // TODO: More has to happen here -- we have to talk to the dispatcher and make sure
+            // the schedule is updated and whatnot...
+
+
+            // Make sure we got a valid process
+            if(process_handle != NULL) {
+                // Is the process running?
+                if(process_handle->state == RUNNING) {
+                    // Throw error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
+                // Is the process already suspended?
+                else if(process_handle->state == SUSPEND) {
+                    //Throw error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
+                // We can finally suspend the process
+                else {
+                    process_handle->state = SUSPEND;
+                    remove_from_list(ready_queue, process_handle->pid);
+                    *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                }
+            }
+            else {
+                // The process does not exist
+                *SystemCallData->Argument[1] = ERR_BAD_PARAM;
+            }
+            break;
+
+        case SYSNUM_RESUME_PROCESS:
+            // TODO: Add dispatcher and scheduler stuff
+
+            tmp_pid = (int*)SystemCallData->Argument[0];
+            process_handle = search_for_pid(process_list, tmp_pid);
+
+            // Make sure we got a valid process
+            if(process_handle != NULL) {
+                // Is the process running?
+                if(process_handle->state == SUSPEND) {
+                    // Throw error
+                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
+                }
+                else {
+                    process_handle->state = READY;
+                    add_to_list(ready_queue, process_handle);
+                    *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                }
+            }
+            else {
+                // The process does not exist
+                *SystemCallData->Argument[1] = ERR_BAD_PARAM;
+            }
+
+            break;
+
         default:
             printf("Unrecognized system call!!\n");
     }
@@ -332,6 +391,20 @@ void    osInit( int argc, char *argv[]  ) {
         test1c runs on a process recognized by the operating system.    */
         test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
         Z502MakeContext( &test_process->context, (void*) test1d, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
+    }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1e" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1c runs on a process recognized by the operating system.    */
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test1e, KERNEL_MODE );
+        switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
+    }
+    else if (( argc > 1 ) && ( strcmp( argv[1], "test1f" ) == 0 ) ) {
+        /*  This should be done by a "os_make_process" routine, so that
+        test1c runs on a process recognized by the operating system.    */
+        test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response);
+        Z502MakeContext( &test_process->context, (void*) test1f, KERNEL_MODE );
         switch_context(root_process_pcb, SWITCH_CONTEXT_KILL_MODE);
     }
 }                                               // End of osInit

@@ -2,11 +2,13 @@
 #define LIST
 #include "my_globals.h"
 
+// Define what a linked list and its nodes are
 typedef struct {
     PCB* data;
     struct Node* next;
 } Node, *LinkedList;
 
+// function prototypes
 LinkedList create_list();
 int add_to_list( LinkedList, PCB*);
 PCB* remove_from_list(LinkedList, INT32);
