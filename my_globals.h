@@ -46,7 +46,6 @@ void switch_context( PCB* pcb, short context_mode);
 void pcb_cascade_delete_by_parent(INT32 parent_pid);
 void dispatcher(void);
 void sleep_process(INT32 sleep_time, PCB* sleeping_process);
-//void get_function_handle(char *name, void** ptr);
 func_ptr get_function_handle(char *name);
 
 #endif

@@ -82,12 +82,14 @@ void    interrupt_handler( void ) {
             MEM_READ(Z502ClockStatus, &Time);
 
             if (timer_queue == NULL) {
-                printf("Error!  no PCBs are on the timer queue\n");
-                return;
+//                printf("Error!  no PCBs are on the timer queue\n");
+                break;
+                //return;
             }
             if (timer_queue->data == NULL) {
-                printf("Error!  no PCBs are on the timer queue\n");
-                return;
+                break;
+//                printf("Error!  no PCBs are on the timer queue\n");
+//                return;
             }
             PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
             //printf("Waking process: %s\n", waking_process->name);
@@ -219,6 +221,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_SLEEP:
+            printf("sleeping process: %i\n", current_PCB->pid);
             // TODO validate parameters?
             sleep_process(SystemCallData->Argument[0], current_PCB);
             switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
@@ -334,7 +337,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
         case SYSNUM_CHANGE_PRIORITY:
             tmp_pid = (int*)SystemCallData->Argument[0];
             INT32 new_priority = (int*)SystemCallData->Argument[1];
-            process_handle = search_for_pid(process_list, tmp_pid);
+            if (tmp_pid == -1)
+                process_handle = current_PCB;
+            else
+                process_handle = search_for_pid(process_list, tmp_pid);
 
             if (process_handle == NULL) {
                 *SystemCallData->Argument[2] = ERR_BAD_PARAM;
@@ -473,7 +479,7 @@ void os_destroy_process(PCB* pcb) {
 void dispatcher() {
     int i = 0;
     while (TRUE) {
-        LinkedList ready_queue;            // Holds all processes that are currently waiting to be run
+
         i++;
         if (i > 1000) {
             printf("limiting to %i iterations before forced quit\n", i);
@@ -520,22 +526,19 @@ void dispatcher() {
             Z502Halt();
         }
 
+        LinkedList ready_queue;            // Holds all processes that are currently waiting to be run
         ready_queue = build_ready_queue(process_list);
 
-        if(ready_queue != NULL) {
-            if(ready_queue->data != NULL) {
-                PCB* process_to_run = ready_queue->data;
-                process_to_run->state = RUNNING;
-                free_ready_queue(ready_queue);
-                switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
-            }
-            else {
-                free_ready_queue(ready_queue);
-                CALL ( Z502Idle() );
-            }
+        if(ready_queue->data != NULL) {
+            PCB* process_to_run = ready_queue->data;
+            process_to_run->state = RUNNING;
+            free_ready_queue(ready_queue);
+            switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
         }
-        else
-            CALL ( Z502Idle() );
+        else {
+            free_ready_queue(ready_queue);
+            CALL( Z502Idle() );
+        }
     }
     printf("Error, I should never ever ever get here\n");
     Z502Halt();

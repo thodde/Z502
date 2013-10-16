@@ -227,6 +227,17 @@ LinkedList build_ready_queue(LinkedList l) {
 
     ready_queue = order_by_priority(ready_queue);
 
+//    printf("Current Schedule: ");
+//    cursor = ready_queue;
+//
+//    while(cursor != NULL) {
+//        if (cursor->data != NULL) {
+//            printf(" %i", cursor->data->pid);
+//        }
+//        cursor = cursor->next;
+//    }
+//    printf("\n");
+
     return ready_queue;
 }
 
