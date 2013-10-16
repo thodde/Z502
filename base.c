@@ -424,6 +424,12 @@ void    osInit( int argc, char *argv[]  ) {
     }
 }                                               // End of osInit
 
+/**
+* This function is responsible for creating all processes through the execution of the programs.
+* The arguments are all part of the process struct and they tell a process what to do when it
+* is created. It returns a fully functional process in whatever state is specified in the arument
+* list. Example: if state == READY, the process would be added to the process list and the ready queue.
+*/
 PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point, INT32 mode) {
     if ((priority < MIN_PRIORITY) || (priority > MAX_PRIORITY)) {
         *error = ERR_BAD_PARAM;
@@ -476,6 +482,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point
 }
 
 // Used for removing unneeded processes that have been marked for termination
+// Takes a PCB pointer and returns nothing after the PCB has been removed
 void os_destroy_process(PCB* pcb) {
     if (current_PCB->pid != root_process_pcb->pid) { //only the root can destroy processes
         printf("error, only root can destroy processes\n");
@@ -599,6 +606,12 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid) {
     }
 }
 
+/**
+* This function takes a process and a time to sleep and it
+* puts the process in a sleeping state for "sleep_time"
+* clock cycles. It adds the process to the timer_queue until it
+* is time to wake up. It returns nothing when it completes.
+*/
 void sleep_process(INT32 sleep_time, PCB* sleeping_process) {
     INT32 current_time;
     MEM_READ(Z502ClockStatus, &current_time);
@@ -619,6 +632,11 @@ void wait_for_interrupt() {
 
 }
 
+/**
+* This function is just a cleaner way to handle the various
+* function calls from the command line arguments. It makes the
+* above functions a little easier to read.
+*/
 func_ptr get_function_handle(char *name) {
     //printf("looking for function handle with name: %s\n", name);
     func_ptr response;
@@ -658,6 +676,12 @@ func_ptr get_function_handle(char *name) {
 }
 
 
+/**
+* This function takes a process and a message list and adds the incoming
+* messages to the corresponding process. This is used in test 1i - 1k.
+* It returns true when the messages are successfully added to the process
+* and false otherwise.
+*/
 BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message) {
     if (target_process == NULL)
         return FALSE;
