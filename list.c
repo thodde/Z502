@@ -249,10 +249,12 @@ LinkedList order_by_priority(LinkedList l) {
     Node *original_list = l;
     Node *add_node = output;
 
+    // iterate through the entire list
     while (get_length(original_list) > 0) {
         Node *best_node = NULL;
         Node *cursor = original_list;
 
+        // find the node with the highest priority right now
         while(cursor != NULL) {
             if (cursor->data != NULL) {
                 if (best_node == NULL)
@@ -263,6 +265,7 @@ LinkedList order_by_priority(LinkedList l) {
             cursor = cursor->next;
         }
 
+        // remove the node with the highest priority and build a new list ordered by priority
         if (best_node != NULL) {
             PCB *removal = remove_from_list(original_list, best_node->data->pid);
 
