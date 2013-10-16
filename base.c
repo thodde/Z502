@@ -331,6 +331,24 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             break;
 
+        case SYSNUM_CHANGE_PRIORITY:
+            tmp_pid = (int*)SystemCallData->Argument[0];
+            INT32 new_priority = (int*)SystemCallData->Argument[1];
+            process_handle = search_for_pid(process_list, tmp_pid);
+
+            if (process_handle == NULL) {
+                *SystemCallData->Argument[2] = ERR_BAD_PARAM;
+            }
+            else if (new_priority < MIN_PRIORITY || new_priority > MAX_PRIORITY) {
+                *SystemCallData->Argument[2] = ERR_BAD_PARAM;
+            }
+            else {
+                process_handle->priority = new_priority;
+                *(SystemCallData->Argument[2]) = ERR_SUCCESS;
+            }
+
+            break;
+
         default:
             printf("Unrecognized system call!!\n");
     }
@@ -612,6 +630,8 @@ func_ptr get_function_handle(char *name) {
         response = (void*) test1k;
     else if ( strcmp( name, "test1l" ) == 0 )
         response = (void*) test1l;
+    else if ( strcmp( name, "test1m" ) == 0 )
+        response = (void*) test1m;
     else
         response = NULL;
     return response;
