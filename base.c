@@ -367,6 +367,60 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             break;
 
+        case SYSNUM_SEND_MESSAGE:
+            tmp_pid = (int*)SystemCallData->Argument[0];
+            process_handle = search_for_pid(process_list, tmp_pid);
+            INT32 message_length = (INT32) SystemCallData->Argument[2];
+
+            if (process_handle == NULL)
+                *SystemCallData->Argument[3] = ERR_BAD_PARAM;
+            else if ((message_length < 0) || (message_length > MAX_MSG))
+                *SystemCallData->Argument[3] = ERR_BAD_PARAM;
+            else {
+                MESSAGE *msg = (MESSAGE*) calloc(1, sizeof(MESSAGE));
+                msg->source_pid = current_PCB->pid;
+                msg->length = message_length;
+                memcpy(msg->msg_buffer, SystemCallData->Argument[1], msg->length);
+
+                if (enqueue_message(process_handle, msg))
+                    *SystemCallData->Argument[3] = ERR_SUCCESS;
+                else {
+                    printf("Error, could not enqueue message at recipient.  Too many messages stored\n");
+                    *SystemCallData->Argument[3] = ERR_BAD_PARAM;
+                }
+            }
+            break;
+
+        case SYSNUM_RECEIVE_MESSAGE:
+//  arg0          INT32 source_pid;
+//  arg1          char message_buffer[N];
+//  arg2          INT32 message_receive_length;
+//  arg3          INT32 message_send_length;
+//  arg4          INT32 message_sender_pid;
+//  arg5          INT32 error;
+            //TODO implement
+
+            tmp_pid = (int*)SystemCallData->Argument[0];
+            process_handle = search_for_pid(process_list, tmp_pid);
+
+            // find the proper PCB that holds the message (it is the recipient)
+
+            // read through the recipient's messages and see if there is a message from the specified sender.  use find_message_by_source(pid)
+
+            // read through the message making sure you don't exceed the message_receive_length
+
+            // add the message to the message_buffer input param
+
+            // remove the message if it can be entirely loaded into the message buffer parameter.  otherwise....do what?!?  Partial messaging?
+
+
+
+
+            *SystemCallData->Argument[5] = ERR_BAD_PARAM;
+
+
+            break;
+
         default:
             printf("Unrecognized system call!!\n");
     }
@@ -695,3 +749,34 @@ BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message) {
     }
     return FALSE;
 }
+
+/**
+ *   Removes a message from the pcb->inbound_messages[] array and returns it to the requestor
+ */
+MESSAGE* remove_message(PCB* pcb, int index) {
+    if ((index < 0) || (index >= MAX_MSG_COUNT ))
+        return NULL;
+
+    if (pcb->inbound_messages[index] == NULL)
+        return NULL;
+
+    MESSAGE* retval = pcb->inbound_messages[index];
+    pcb->inbound_messages[index] = NULL;
+    return retval;
+}
+
+/**
+ *  Returns the index array from the pcb->inbound_messages[] array that corresponds to the request
+ *  If no messages exist then it returns -1;
+ */
+int find_message_by_source(PCB* pcb, int source_pid) {
+    int i;
+    for (i = 0; i < MAX_MSG_COUNT; i++) {
+        if (pcb->inbound_messages[i] != NULL) {
+            if (pcb->inbound_messages[i]->source_pid == source_pid)
+                return i;
+        }
+    }
+    return -1;
+}
+
