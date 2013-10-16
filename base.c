@@ -133,8 +133,20 @@ void    fault_handler( void )
     // Now read the status of this device
     MEM_READ(Z502InterruptStatus, &status );
 
-    printf( "Fault_handler: Found vector type %d with value %d\n",
-                        device_id, status );
+    printf( "Fault_handler: Found vector type %d with value %d\n", device_id, status );
+
+    switch(device_id) {
+        case PRIVILEGED_INSTRUCTION:
+            printf("Error!  Requesting privileged command while in USER mode\n");
+            Z502Halt();
+            break;
+
+        default:
+            printf("Unrecognized device handler: %d\n", device_id);
+            break;
+    }
+
+
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
 }                                       /* End of fault_handler */
@@ -237,7 +249,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 *(SystemCallData->Argument[4]) = ERR_BAD_PARAM;
             }
             else {
-                process_handle = os_make_process(name, priority, SystemCallData->Argument[4], addr, KERNEL_MODE);
+                process_handle = os_make_process(name, priority, SystemCallData->Argument[4], addr, USER_MODE);
 
                 if(process_handle != NULL) {
                     *(SystemCallData->Argument[4]) = ERR_SUCCESS;
@@ -403,7 +415,7 @@ void    osInit( int argc, char *argv[]  ) {
         //printf("Function: %s address1 : (%ld, %ld) address2: (%ld, %ld)\n", argv[1], &func, func, &test1a, test1a);
 
         if (func != NULL) {
-                test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, KERNEL_MODE);
+                test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, USER_MODE);
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
         }
         else {
