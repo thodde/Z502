@@ -26,15 +26,21 @@
 #define         MAX_PRIORITY        100
 
 typedef struct {
-    INT32   pid;
-    INT32   delay;
-    char    name[MAX_NAME];
-    INT32   parent;
-    INT32   state;
-    INT32   mode;
-    INT32   priority;
-    void*   context;
-    long    time_spent_processing;
+    INT16 msg_buffer[MAX_MSG];
+    INT32 source_pid;
+} MESSAGE;
+
+typedef struct {
+    INT32       pid;
+    INT32       delay;
+    char        name[MAX_NAME];
+    INT32       parent;
+    INT32       state;
+    INT32       mode;
+    INT32       priority;
+    void*       context;
+    long        time_spent_processing;
+    MESSAGE*    inbound_messages[MAX_MSG_COUNT];
 } PCB;
 
 typedef void* func_ptr;
@@ -47,5 +53,6 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid);
 void dispatcher(void);
 void sleep_process(INT32 sleep_time, PCB* sleeping_process);
 func_ptr get_function_handle(char *name);
+BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message);
 
 #endif
