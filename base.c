@@ -44,7 +44,6 @@ INT32 gen_pid = 1;
 PCB                *current_PCB = NULL;    // this is the currently running PCB
 PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
-LinkedList         ready_queue;            // Holds all processes that are currently waiting to be run
 LinkedList         process_list;           // Holds all processes that exist
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
@@ -100,7 +99,12 @@ void    interrupt_handler( void ) {
             }
 
             if (get_length(timer_queue) > 0) {
-                MEM_WRITE(Z502TimerStart, &(timer_queue->data->delay));
+                INT32 current_time;
+                MEM_READ(Z502ClockStatus, &current_time);
+                INT32 sleep_time = timer_queue->data->delay - current_time;
+                if (sleep_time < 0) //TODO I should validate this or throw an error if it is < 0
+                    sleep_time = 0;
+                MEM_WRITE(Z502TimerStart, &(sleep_time));
             }
             else {
                 MEM_WRITE(Z502InterruptClear, &Index );
@@ -207,7 +211,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
                     process_handle->state = TERMINATE;
 
-                    //TODO this should possibly go to the process_handler more often than just if you are killing the root process
+                    // TODO this should possibly go to the process_handler more often than just if you are killing the root process
                     //if (process_handle->pid == root_process_pcb->pid) {
                     switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
                     //}
@@ -223,9 +227,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_SLEEP:
-            MEM_READ( Z502TimerStatus, &current_time);
-            current_PCB->delay = SystemCallData->Argument[0];
-            start_timer();
+            // TODO validate parameters?
+            sleep_process(SystemCallData->Argument[0], current_PCB);
             switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
             break;
 
@@ -299,8 +302,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 // We can finally suspend the process
                 else {
                     process_handle->state = SUSPEND;
-                    remove_from_list(ready_queue, process_handle->pid);
+                    //not needed, the ready queue is built each time the dispatcher is called
+                    //remove_from_list(ready_queue, process_handle->pid);
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
+                    //TODO what if you are suspending the current process?
                 }
             }
             else {
@@ -318,17 +323,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             // Make sure we got a valid process
             if(process_handle != NULL) {
                 // Is the process running?
-                if(process_handle->state == RUNNING) {
-                    // Throw error
-                    *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
-                }
-                else if(process_handle->state == READY) {
+                if(process_handle->state != SUSPEND) {
                     // Throw error
                     *(SystemCallData->Argument[1]) = ERR_BAD_PARAM;
                 }
                 else {
                     process_handle->state = READY;
-                    add_to_list(ready_queue, process_handle);
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
                 }
             }
@@ -463,6 +463,7 @@ void os_destroy_process(PCB* pcb) {
 void dispatcher() {
     int i = 0;
     while (TRUE) {
+        LinkedList ready_queue;            // Holds all processes that are currently waiting to be run
         i++;
         if (i > 1000) {
             printf("limiting to %i iterations before forced quit\n", i);
@@ -490,8 +491,6 @@ void dispatcher() {
             //printf("No processes exist other than root, halting\n");
             Z502Halt();
         }
-        else
-            //printf("there are %i processes\n", get_length(process_list));
 
         if (root_process_pcb->state == TERMINATE) {
             //printf("Root processed killed.  halting\n");
@@ -505,11 +504,9 @@ void dispatcher() {
                 PCB* process_to_run = ready_queue->data;
                 process_to_run->state = RUNNING;
                 free_ready_queue(ready_queue);
-                //printf("found live node, switching to process '%s' with pid '%i' and running time '%ld'\n", process_to_run->name, process_to_run->pid, process_to_run->time_spent_processing);
                 switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
             }
             else {
-                //printf("no nodes are available to run...sleeping\n");
                 free_ready_queue(ready_queue);
                 CALL ( Z502Idle() );
             }
@@ -559,11 +556,18 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid) {
     }
 }
 
-void start_timer() {
-    INT32 status;
-    add_to_list(timer_queue, current_PCB);
-    current_PCB->state = SLEEPING;
-    //printf("sleeping for delay: %ld\n", current_PCB->delay);
+void sleep_process(INT32 sleep_time, PCB* sleeping_process) {
+    INT32 current_time;
+    MEM_READ(Z502ClockStatus, &current_time);
+    INT32 wait_time = current_time + sleep_time;
+    sleeping_process->delay = wait_time;
+    add_to_list(timer_queue, sleeping_process);
+    sleeping_process->state = SLEEPING;
+
+    INT32 ticks_till_wake = timer_queue->data->delay - current_time;
+    if (ticks_till_wake < 0)       //TODO I should validate this or throw an error if it is every < 0
+        ticks_till_wake = 0;
+
     MEM_WRITE(Z502TimerStart, &timer_queue->data->delay);
 }
 

@@ -225,7 +225,52 @@ LinkedList build_ready_queue(LinkedList l) {
         cursor = cursor->next;
     }
 
+    ready_queue = order_by_priority(ready_queue);
+
     return ready_queue;
+}
+
+/**
+ *  Is destructive to the calling list.
+ */
+LinkedList order_by_priority(LinkedList l) {
+    LinkedList output = create_list();
+    Node *original_list = l;
+    Node *add_node = output;
+
+    while (get_length(original_list) > 0) {
+        Node *best_node = NULL;
+        Node *cursor = original_list;
+
+        while(cursor != NULL) {
+            if (cursor->data != NULL) {
+                if (best_node == NULL)
+                    best_node = cursor;
+                else if (best_node->data->priority > cursor->data->priority)
+                    best_node = cursor;
+            }
+            cursor = cursor->next;
+        }
+
+        if (best_node != NULL) {
+            PCB *removal = remove_from_list(original_list, best_node->data->pid);
+
+            if (add_node->data == NULL)
+                add_node->data = removal;
+            else {
+                add_node->next = (Node*) calloc (1, sizeof(Node));
+                add_node = add_node->next;
+                add_node->next = NULL;
+                add_node->data = removal;
+            }
+        }
+        else
+            printf("Error!  no node was detected but the list length is greater than 1\n");
+
+        cursor = original_list;
+    }
+
+    return output;
 }
 
 /**
