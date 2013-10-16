@@ -600,6 +600,18 @@ func_ptr get_function_handle(char *name) {
         response = (void*) test1e;
     else if ( strcmp( name, "test1f" ) == 0 )
         response = (void*) test1f;
+    else if ( strcmp( name, "test1g" ) == 0 )
+        response = (void*) test1g;
+    else if ( strcmp( name, "test1h" ) == 0 )
+        response = (void*) test1h;
+    else if ( strcmp( name, "test1i" ) == 0 )
+        response = (void*) test1i;
+    else if ( strcmp( name, "test1j" ) == 0 )
+        response = (void*) test1j;
+    else if ( strcmp( name, "test1k" ) == 0 )
+        response = (void*) test1k;
+    else if ( strcmp( name, "test1l" ) == 0 )
+        response = (void*) test1l;
     else
         response = NULL;
     return response;
