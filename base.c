@@ -49,7 +49,7 @@ LinkedList         process_list;           // Holds all processes that exist
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              last_context_switch = 0;  // the number of ticks since the last context switch
 
-
+BOOL add_next_to_timer = FALSE;
 BOOL interrupt_lock = TRUE;
 
 char *call_names[] = { "mem_read ", "mem_write",
@@ -99,26 +99,18 @@ void    interrupt_handler( void ) {
             }
 
             if (get_length(timer_queue) > 0) {
-                INT32 current_time;
-                MEM_READ(Z502ClockStatus, &current_time);
-                INT32 sleep_time = timer_queue->data->delay - current_time;
-                if (sleep_time < 0) //TODO I should validate this or throw an error if it is < 0
-                    sleep_time = 0;
-                MEM_WRITE(Z502TimerStart, &(sleep_time));
-            }
-            else {
-                MEM_WRITE(Z502InterruptClear, &Index );
+                add_next_to_timer = TRUE;
             }
 
             break;
 
         default:
-            printf("Unrecognized interrupt\n");
-            MEM_WRITE(Z502InterruptClear, &Index );
+            printf("Unrecognized interrupt %i\n", device_id);
             break;
     }
 
     // Clear out this device - we're done with it
+    MEM_WRITE(Z502InterruptClear, &Index );
 }                                       /* End of interrupt_handler */
 
 /************************************************************************
@@ -485,6 +477,19 @@ void dispatcher() {
             }
             else
                 cursor = cursor->next;
+        }
+
+        if (add_next_to_timer) {
+            add_next_to_timer = FALSE;
+
+            if (get_length(timer_queue) > 0) {
+                INT32 current_time;
+                MEM_READ(Z502ClockStatus, &current_time);
+                INT32 sleep_time = timer_queue->data->delay - current_time;
+                if (sleep_time < 0)
+                    sleep_time = 0;
+                MEM_WRITE(Z502TimerStart, &(sleep_time));
+            }
         }
 
         if (get_length(process_list) == 0) {        //If no active processes then halt
