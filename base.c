@@ -432,7 +432,8 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point
 
     PCB* pcb = (PCB*) calloc(1, sizeof(PCB));       // allocate memory for PCB
 
-    for (int i = 0; i < MAX_MSG_COUNT; i++) {       // clear initial message buffer
+    int i = 0;
+    for (i = 0; i < MAX_MSG_COUNT; i++) {       // clear initial message buffer
         pcb->inbound_messages[i] = NULL;
     }
 
@@ -649,7 +650,8 @@ BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message) {
     if (target_process == NULL)
         return FALSE;
 
-    for (int i = 0; i < MAX_MSG_COUNT; i++) {
+    int i = 0;
+    for (i = 0; i < MAX_MSG_COUNT; i++) {
         if (target_process->inbound_messages[i] == NULL) {
             target_process->inbound_messages[i] = inbound_message;
             return TRUE;
