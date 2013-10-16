@@ -28,6 +28,7 @@
 typedef struct {
     INT16 msg_buffer[MAX_MSG];
     INT32 source_pid;
+    INT32 length;
 } MESSAGE;
 
 typedef struct {
@@ -54,5 +55,7 @@ void dispatcher(void);
 void sleep_process(INT32 sleep_time, PCB* sleeping_process);
 func_ptr get_function_handle(char *name);
 BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message);
+MESSAGE* remove_message(PCB* pcb, int index);
+int find_message_by_source(PCB* pcb, int source_pid);
 
 #endif
