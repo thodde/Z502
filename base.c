@@ -558,11 +558,11 @@ void dispatcher() {
     int i = 0;
     while (TRUE) {
 
-        i++;
-        if (i > 1000) {
-            printf("limiting to %i iterations before forced quit\n", i);
-            Z502Halt();
-        }
+//        i++;
+//        if (i > 1000) {
+//            printf("limiting to %i iterations before forced quit\n", i);
+//            Z502Halt();
+//        }
 
         // Check for terminated processes.
         Node *cursor = process_list;
@@ -724,6 +724,22 @@ func_ptr get_function_handle(char *name) {
         response = (void*) test1l;
     else if ( strcmp( name, "test1m" ) == 0 )
         response = (void*) test1m;
+    else if ( strcmp( name, "test2a" ) == 0 )
+        response = (void*) test2a;
+    else if ( strcmp( name, "test2b" ) == 0 )
+        response = (void*) test2b;
+    else if ( strcmp( name, "test2c" ) == 0 )
+        response = (void*) test2c;
+    else if ( strcmp( name, "test2d" ) == 0 )
+        response = (void*) test2d;
+    else if ( strcmp( name, "test2e" ) == 0 )
+        response = (void*) test2e;
+    else if ( strcmp( name, "test2f" ) == 0 )
+        response = (void*) test2f;
+    else if ( strcmp( name, "test2g" ) == 0 )
+        response = (void*) test2g;
+    else if ( strcmp( name, "test2h" ) == 0 )
+        response = (void*) test2h;
     else
         response = NULL;
     return response;
