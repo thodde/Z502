@@ -25,10 +25,16 @@
 #define         DEFAULT_PRIORITY    50
 #define         MAX_PRIORITY        100
 
+// PROCESS SUSPEND REASONS
+#define         WAITING_UNDEFINED   0
+#define         WAITING_FOR_MESSAGE 1
+
 typedef struct {
     INT16 msg_buffer[MAX_MSG];
     INT32 source_pid;
     INT32 length;
+    BOOL handled;
+    BOOL broadcast_message;
 } MESSAGE;
 
 typedef struct {
@@ -39,6 +45,7 @@ typedef struct {
     INT32       state;
     INT32       mode;
     INT32       priority;
+    INT32       suspend_reason;
     void*       context;
     long        time_spent_processing;
     MESSAGE*    inbound_messages[MAX_MSG_COUNT];
@@ -58,5 +65,7 @@ func_ptr get_function_handle(char *name);
 BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message);
 MESSAGE* remove_message(PCB* pcb, int index);
 int find_message_by_source(PCB* pcb, int source_pid);
+void clear_handled_broadcast_message();
+int find_handled_message(PCB* pcb);
 
 #endif
