@@ -438,6 +438,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 //  arg4          INT32 message_sender_pid;
 //  arg5          INT32 error;
 
+                //TODO notes: partial completion of test1j.  The system now hangs.  I suspect no processes are being properly woken up
+                // when they receive they receive a message.  Need to test this!!
+
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 MESSAGE *msg = NULL;
                 INT32 able_to_receive_length = (INT32) SystemCallData->Argument[2];
