@@ -42,6 +42,7 @@ typedef struct {
     void*       context;
     long        time_spent_processing;
     MESSAGE*    inbound_messages[MAX_MSG_COUNT];
+    UINT16      pagetable[VIRTUAL_MEM_PGS];
 } PCB;
 
 typedef void* func_ptr;

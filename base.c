@@ -38,6 +38,7 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 
 extern void          *TO_VECTOR [];
 
+short CALL_TYPE;
 
 // for keeping track of the current pid
 INT32 gen_pid = 1;
@@ -140,12 +141,33 @@ void    fault_handler( void )
             printf("Error!  Requesting privileged command while in USER mode\n");
             Z502Halt();
             break;
+        case INVALID_MEMORY:
+            Z502_PAGE_TBL_ADDR = current_PCB->pagetable;  //link with PCB
+            Z502_PAGE_TBL_LENGTH = 1024;
 
+            //check the page size to make sure it is in valid range
+            if(status < 0 || status > 1023) {
+                printf("ERROR! Illegal Page Size! Terminating!\n");
+                Z502Halt();
+            }
+
+            // TODO need to pass the system variables in here so we can use them for MEM_READ and MEM_WRITE
+
+            // memory read or write system call
+            if(CALL_TYPE == SYSNUM_MEM_READ) {
+                //MEM_READ((INT32)SystemCallData->Argument[0], (INT32*)SystemCallData->Argument[1]);
+                printf("Trying to read!\n");
+            }
+            else if(CALL_TYPE == SYSNUM_MEM_WRITE) {
+                //MEM_WRITE((INT32)SystemCallData->Argument[0], (INT32*)SystemCallData->Argument[1]);
+                printf("Trying to write!\n");
+            }
+
+            break;
         default:
             printf("Unrecognized device handler: %d\n", device_id);
             break;
     }
-
 
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
@@ -173,8 +195,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     PCB*                process_handle;
     Node*               process_node;
     INT32               tmp_pid;
+    INT32               address;
+    INT32               data_written;
 
     call_type = (short)SystemCallData->SystemCallNumber;
+    CALL_TYPE = call_type;
     if ( do_print > 0 ) {
         printf( "SVC handler: %s\n", call_names[call_type]);
         for (i = 0; i < SystemCallData->NumberOfArguments - 1; i++ ){
@@ -421,6 +446,14 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             break;
 
+        //case SYSNUM_MEM_READ:
+            //*SystemCallData->Argument[0] = address;
+            //*SystemCallData->Argument[1] = data_written;
+        //    break;
+        //case SYSNUM_MEM_WRITE:
+            //address = (INT32*)SystemCallData->Argument[0];
+            //data_written = (INT32*)SystemCallData->Argument[1];
+        //    break;
         default:
             printf("Unrecognized system call!!\n");
     }
@@ -514,6 +547,7 @@ PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point
     gen_pid++;
     pcb->state=CREATE;
     pcb->time_spent_processing = 0;
+    memset(pcb->pagetable, 0, VIRTUAL_MEM_PGS+1);   // assign pagetable
 
     memset(pcb->name, 0, MAX_NAME);                 // assign process name
     strcpy(pcb->name, name);                        // assign process name
