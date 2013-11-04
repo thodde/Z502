@@ -29,7 +29,6 @@
 #include             "my_globals.h"
 #include             "list.h"
 
-
 extern INT16 Z502_MODE;
 
 // These locations are global and define information about the page table
@@ -40,19 +39,21 @@ extern void          *TO_VECTOR [];
 
 // TODO need to figure out how to fill this if svc is not called
 // i.e. when the call goes directly to the hardware instead of passing through the OS
+//maybe need to use an extern??
+//extern INT16 CALL_TYPE;  ??
 INT16 CALL_TYPE;
 
 // This is so that I will be able to access the
 // registers from outside the svc function
-INT32 Z502_REG1;
-INT32 Z502_REG2;
-INT32 Z502_REG3;
-INT32 Z502_REG4;
-INT32 Z502_REG5;
-INT32 Z502_REG6;
-INT32 Z502_REG7;
-INT32 Z502_REG8;
-INT32 Z502_REG9;
+extern INT32 Z502_REG1;
+extern INT32 Z502_REG2;
+extern INT32 Z502_REG3;
+extern INT32 Z502_REG4;
+extern INT32 Z502_REG5;
+extern INT32 Z502_REG6;
+extern INT32 Z502_REG7;
+extern INT32 Z502_REG8;
+extern INT32 Z502_REG9;
 
 // for keeping track of the current pid
 INT32 gen_pid = 1;
