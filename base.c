@@ -38,7 +38,21 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 
 extern void          *TO_VECTOR [];
 
-short CALL_TYPE;
+// TODO need to figure out how to fill this if svc is not called
+// i.e. when the call goes directly to the hardware instead of passing through the OS
+INT16 CALL_TYPE;
+
+// This is so that I will be able to access the
+// registers from outside the svc function
+INT32 Z502_REG1;
+INT32 Z502_REG2;
+INT32 Z502_REG3;
+INT32 Z502_REG4;
+INT32 Z502_REG5;
+INT32 Z502_REG6;
+INT32 Z502_REG7;
+INT32 Z502_REG8;
+INT32 Z502_REG9;
 
 // for keeping track of the current pid
 INT32 gen_pid = 1;
@@ -151,15 +165,14 @@ void    fault_handler( void )
                 Z502Halt();
             }
 
-            // TODO need to pass the system variables in here so we can use them for MEM_READ and MEM_WRITE
-
             // memory read or write system call
             if(CALL_TYPE == SYSNUM_MEM_READ) {
-                //MEM_READ((INT32)SystemCallData->Argument[0], (INT32*)SystemCallData->Argument[1]);
+                MEM_READ(Z502_REG1, &Z502_REG2);
                 printf("Trying to read!\n");
             }
             else if(CALL_TYPE == SYSNUM_MEM_WRITE) {
-                //MEM_WRITE((INT32)SystemCallData->Argument[0], (INT32*)SystemCallData->Argument[1]);
+                MEM_WRITE(Z502_REG1, &Z502_REG2);
+                Z502Halt();
                 printf("Trying to write!\n");
             }
 
@@ -195,11 +208,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     PCB*                process_handle;
     Node*               process_node;
     INT32               tmp_pid;
-    INT32               address;
-    INT32               data_written;
 
     call_type = (short)SystemCallData->SystemCallNumber;
     CALL_TYPE = call_type;
+    Z502_REG1 = (INT32) SystemCallData->Argument[0];
+    Z502_REG2 = (INT32*) SystemCallData->Argument[1];
+
     if ( do_print > 0 ) {
         printf( "SVC handler: %s\n", call_names[call_type]);
         for (i = 0; i < SystemCallData->NumberOfArguments - 1; i++ ){
@@ -283,7 +297,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 else
                     *(SystemCallData->Argument[4]) = ERR_BAD_PARAM;
             }
-
 
             break;
 
@@ -778,11 +791,6 @@ void sleep_process(INT32 sleep_time, PCB* sleeping_process) {
         ticks_till_wake = 0;
 
     MEM_WRITE(Z502TimerStart, &timer_queue->data->delay);
-}
-
-// This will be needed later
-void wait_for_interrupt() {
-
 }
 
 /**

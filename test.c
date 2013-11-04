@@ -1255,6 +1255,7 @@ void test2a(void) {
     printf("Release %s:Test 2a: Pid %ld\n", CURRENT_REL, Z502_REG4);
     Z502_REG3 = 412;
     Z502_REG1 = Z502_REG3 + Z502_REG4;
+
     MEM_WRITE(Z502_REG3, &Z502_REG1);
 
     MEM_READ(Z502_REG3, &Z502_REG2);
