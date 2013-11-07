@@ -37,23 +37,7 @@ extern INT16         Z502_PAGE_TBL_LENGTH;
 
 extern void          *TO_VECTOR [];
 
-// TODO need to figure out how to fill this if svc is not called
-// i.e. when the call goes directly to the hardware instead of passing through the OS
-//maybe need to use an extern??
-//extern INT16 CALL_TYPE;  ??
-INT16 CALL_TYPE;
-
-// This is so that I will be able to access the
-// registers from outside the svc function
-extern INT32 Z502_REG1;
-extern INT32 Z502_REG2;
-extern INT32 Z502_REG3;
-extern INT32 Z502_REG4;
-extern INT32 Z502_REG5;
-extern INT32 Z502_REG6;
-extern INT32 Z502_REG7;
-extern INT32 Z502_REG8;
-extern INT32 Z502_REG9;
+UINT16 virtual_address;
 
 // for keeping track of the current pid
 INT32 gen_pid = 1;
@@ -157,25 +141,17 @@ void    fault_handler( void )
             Z502Halt();
             break;
         case INVALID_MEMORY:
-            Z502_PAGE_TBL_ADDR = current_PCB->pagetable;  //link with PCB
-            Z502_PAGE_TBL_LENGTH = 1024;
 
-            //check the page size to make sure it is in valid range
-            if(status < 0 || status > 1023) {
-                printf("ERROR! Illegal Page Size! Terminating!\n");
+            // Make sure we are not out of virtual memory
+            if(status >= VIRTUAL_MEM_PGS) {
                 Z502Halt();
             }
 
-            // memory read or write system call
-            if(CALL_TYPE == SYSNUM_MEM_READ) {
-                MEM_READ(Z502_REG1, &Z502_REG2);
-                printf("Trying to read!\n");
+            if(Z502_PAGE_TBL_LENGTH == 0) {
+                Z502_PAGE_TBL_LENGTH = 1024;
+                Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
             }
-            else if(CALL_TYPE == SYSNUM_MEM_WRITE) {
-                MEM_WRITE(Z502_REG1, &Z502_REG2);
-                Z502Halt();
-                printf("Trying to write!\n");
-            }
+            Z502_PAGE_TBL_ADDR[status] = virtual_address++;
 
             break;
         default:
@@ -211,9 +187,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     INT32               tmp_pid;
 
     call_type = (short)SystemCallData->SystemCallNumber;
-    CALL_TYPE = call_type;
-    Z502_REG1 = (INT32) SystemCallData->Argument[0];
-    Z502_REG2 = (INT32*) SystemCallData->Argument[1];
 
     if ( do_print > 0 ) {
         printf( "SVC handler: %s\n", call_names[call_type]);
@@ -549,6 +522,8 @@ void    osInit( int argc, char *argv[]  ) {
     INT32 error_response;
     void  *next_context;
     INT32 i;
+
+    virtual_address = PTBL_VALID_BIT;
 
     PCB* test_process;
     timer_queue = create_list();
