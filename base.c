@@ -82,17 +82,13 @@ void    interrupt_handler( void ) {
             MEM_READ(Z502ClockStatus, &Time);
 
             if (timer_queue == NULL) {
-//                printf("Error!  no PCBs are on the timer queue\n");
                 break;
-                //return;
             }
+
             if (timer_queue->data == NULL) {
                 break;
-//                printf("Error!  no PCBs are on the timer queue\n");
-//                return;
             }
             PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
-            //printf("Waking process: %s\n", waking_process->name);
             waking_process->state = READY;
 
             //add the next one to the queue
@@ -185,6 +181,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     PCB*                process_handle;
     Node*               process_node;
     INT32               tmp_pid;
+    long                disk_id;
+    long                sector;
 
     call_type = (short)SystemCallData->SystemCallNumber;
 
@@ -498,14 +496,20 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             break;
 
-        //case SYSNUM_MEM_READ:
-            //*SystemCallData->Argument[0] = address;
-            //*SystemCallData->Argument[1] = data_written;
-        //    break;
-        //case SYSNUM_MEM_WRITE:
-            //address = (INT32*)SystemCallData->Argument[0];
-            //data_written = (INT32*)SystemCallData->Argument[1];
-        //    break;
+        case SYSNUM_DISK_READ:
+            // These registers apply to READ and WRITE
+            //Z502_REG3  - address where data was written/read.
+            //Z502_REG4  - process id of this process.
+            //Z502_REG6  - number of iterations/loops through the code.
+            //Z502_REG7  - which page will the write/read be on. start at 0
+            //Z502_REG9  - returned error code.
+            break;
+        case SYSNUM_DISK_WRITE:
+            //        DISK_WRITE(disk_id, sector, (char* )(data_written->char_data));
+            //disk_id = (long) SystemCallData->Argument[0];
+            //sector = (long) SystemCallData->Argument[1];
+            // something for char_data has to happen also
+            break;
         default:
             printf("Unrecognized system call!!\n");
     }
