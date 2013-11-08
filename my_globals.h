@@ -29,6 +29,12 @@
 #define         WAITING_UNDEFINED   0
 #define         WAITING_FOR_MESSAGE 1
 
+// LOCK STATES
+#define         LOCK                        1
+#define         UNLOCK                      0
+#define         SUSPEND_UNTIL_LOCKED        TRUE
+#define         DO_NOT_SUSPEND              FALSE
+
 typedef struct {
     INT16 msg_buffer[MAX_MSG];
     INT32 source_pid;

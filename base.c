@@ -69,6 +69,7 @@ void    interrupt_handler( void ) {
     INT32              status;
     INT32              Index = 0;
     INT32              Time;
+    INT32              lock_result;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -106,6 +107,15 @@ void    interrupt_handler( void ) {
             printf("Unrecognized interrupt %i\n", device_id);
             break;
     }
+
+    // TODO Make sure this is ok
+    // No idea if the Memory Address arg is correct or not but test 2B almost works!!!
+    READ_MODIFY(MEMORY_INTERLOCK_BASE, LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
+    // Need some function to move a process from the timer_queue to the ready_queue
+    // and reset the time in here: something like dispatcher() ???
+
+    READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
