@@ -432,7 +432,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 INT32 message_length = (INT32) SystemCallData->Argument[2];
 
-
                 MESSAGE *msg = (MESSAGE*) calloc(1, sizeof(MESSAGE));
                 msg->handled = FALSE;
                 msg->source_pid = current_PCB->pid;
@@ -445,20 +444,27 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     free(msg);
                 }
                 else if (tmp_pid == -1) {    // Broadcast message
+                    BOOL able_to_process = FALSE;
                     msg->broadcast_message = TRUE;
                     Node *cursor = process_list;
                     while (cursor != NULL) {
-                        if (cursor->data != NULL)
-                            if (cursor->data->pid != current_PCB->pid) {
-                                enqueue_message(cursor->data, msg);
+                        if (cursor->data != NULL) {
+//                            if (cursor->data->pid != current_PCB->pid) {
+                                if(enqueue_message(cursor->data, msg))
+                                    able_to_process = TRUE;
 
                                 if ((cursor->data->state == SUSPEND) && (cursor->data->suspend_reason == WAITING_FOR_MESSAGE))
                                     cursor->data->state = READY;              //wake it up!
-                            }
+//                            }
+                        }
 
                         cursor = cursor->next;
                     }
-                    *SystemCallData->Argument[3] = ERR_SUCCESS;
+
+                    if (able_to_process)
+                        *SystemCallData->Argument[3] = ERR_SUCCESS;
+                    else
+                        *SystemCallData->Argument[3] = ERR_BAD_PARAM;
                 }
                 else {
                     process_handle = search_for_pid(process_list, tmp_pid);
@@ -523,7 +529,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     }
                     else {
                         memcpy(SystemCallData->Argument[1], msg->msg_buffer, msg->length);
-                        printf("This is what is being written back to the system: %s from source: %ld\n", SystemCallData->Argument[1], msg->source_pid);
 
                         *(SystemCallData->Argument[3]) = msg->length;
                         *(SystemCallData->Argument[4]) = msg->source_pid;
@@ -694,7 +699,9 @@ void dispatcher() {
     int i = 0;
     while (TRUE) {
 
-//        i++;
+        i++;
+        //if ((i % 100) == 0)
+        //    printf("iterating round: %i\n", i);
 //        if (i > 1000) {
 //            printf("limiting to %i iterations before forced quit\n", i);
 //            Z502Halt();
@@ -747,6 +754,7 @@ void dispatcher() {
             PCB* process_to_run = ready_queue->data;
             process_to_run->state = RUNNING;
             free_ready_queue(ready_queue);
+
             switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
         }
         else {

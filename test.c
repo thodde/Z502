@@ -836,7 +836,7 @@ void test1j(void) {
     }    // End of for loop
 
     //      Keep sending legal messages until the architectural (OS)
-    //      limit for buffer space is exhausted.     
+    //      limit for buffer space is exhausted.
 
     Z502_REG9 = ERR_SUCCESS;
     while (Z502_REG9 == ERR_SUCCESS) {
