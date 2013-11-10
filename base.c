@@ -666,8 +666,8 @@ void dispatcher() {
     while (TRUE) {
 
         i++;
-        if ((i % 100) == 0)
-            printf("iterating round: %i\n", i);
+        //if ((i % 100) == 0)
+        //    printf("iterating round: %i\n", i);
 //        if (i > 1000) {
 //            printf("limiting to %i iterations before forced quit\n", i);
 //            Z502Halt();
