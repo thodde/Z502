@@ -102,20 +102,54 @@ void    interrupt_handler( void ) {
             }
 
             break;
+        case(DISK_INTERRUPT):
+            interrupt_lock = TRUE;
 
+            // TODO Make sure this is ok
+            // No idea if the Memory Address arg is correct or not but test 2B almost works!!!
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
+            // Need some function to move a process from the timer_queue to the ready_queue
+            // and reset the time in here: something like dispatcher() ???
+
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
+            break;
+        case(DISK_INTERRUPT+1):
+            // TODO Make sure this is ok
+            // No idea if the Memory Address arg is correct or not but test 2B almost works!!!
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
+            // Need some function to move a process from the timer_queue to the ready_queue
+            // and reset the time in here: something like dispatcher() ???
+
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
+            break;
+        case(DISK_INTERRUPT+2):
+            break;
+        case(DISK_INTERRUPT+3):
+            break;
+        case(DISK_INTERRUPT+4):
+            break;
+        case(DISK_INTERRUPT+5):
+            break;
+        case(DISK_INTERRUPT+6):
+            break;
+        case(DISK_INTERRUPT+7):
+            break;
+        case(DISK_INTERRUPT+8):
+            break;
+        case(DISK_INTERRUPT+9):
+            break;
+        case(DISK_INTERRUPT+10):
+            break;
+        case(DISK_INTERRUPT+11):
+            break;
         default:
             printf("Unrecognized interrupt %i\n", device_id);
             break;
     }
-
-    // TODO Make sure this is ok
-    // No idea if the Memory Address arg is correct or not but test 2B almost works!!!
-    READ_MODIFY(MEMORY_INTERLOCK_BASE, LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
-    // Need some function to move a process from the timer_queue to the ready_queue
-    // and reset the time in here: something like dispatcher() ???
-
-    READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
