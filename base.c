@@ -103,6 +103,17 @@ void    interrupt_handler( void ) {
 
             break;
         case(DISK_INTERRUPT):
+        case(DISK_INTERRUPT+1):
+        case(DISK_INTERRUPT+2):
+        case(DISK_INTERRUPT+3):
+        case(DISK_INTERRUPT+4):
+        case(DISK_INTERRUPT+5):
+        case(DISK_INTERRUPT+6):
+        case(DISK_INTERRUPT+7):
+        case(DISK_INTERRUPT+8):
+        case(DISK_INTERRUPT+9):
+        case(DISK_INTERRUPT+10):
+        case(DISK_INTERRUPT+11):
             interrupt_lock = TRUE;
 
             // TODO Make sure this is ok
@@ -114,37 +125,6 @@ void    interrupt_handler( void ) {
 
             READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
-            break;
-        case(DISK_INTERRUPT+1):
-            // TODO Make sure this is ok
-            // No idea if the Memory Address arg is correct or not but test 2B almost works!!!
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
-            // Need some function to move a process from the timer_queue to the ready_queue
-            // and reset the time in here: something like dispatcher() ???
-
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
-            break;
-        case(DISK_INTERRUPT+2):
-            break;
-        case(DISK_INTERRUPT+3):
-            break;
-        case(DISK_INTERRUPT+4):
-            break;
-        case(DISK_INTERRUPT+5):
-            break;
-        case(DISK_INTERRUPT+6):
-            break;
-        case(DISK_INTERRUPT+7):
-            break;
-        case(DISK_INTERRUPT+8):
-            break;
-        case(DISK_INTERRUPT+9):
-            break;
-        case(DISK_INTERRUPT+10):
-            break;
-        case(DISK_INTERRUPT+11):
             break;
         default:
             printf("Unrecognized interrupt %i\n", device_id);
@@ -165,6 +145,7 @@ void    fault_handler( void )
     INT32       device_id;
     INT32       status;
     INT32       Index = 0;
+    PAGE*       return_page;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -289,7 +270,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
         case SYSNUM_SLEEP:
             printf("sleeping process: %i\n", current_PCB->pid);
-            // TODO validate parameters?
             sleep_process(SystemCallData->Argument[0], current_PCB);
             switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
             break;
@@ -344,10 +324,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
 
-            // TODO: More has to happen here -- we have to talk to the dispatcher and make sure
-            // the schedule is updated and whatnot...
-
-
             // Make sure we got a valid process
             if(process_handle != NULL) {
                 // Is the process running?
@@ -377,8 +353,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_RESUME_PROCESS:
-            // TODO: Add dispatcher and scheduler stuff
-
             tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
 
@@ -621,7 +595,7 @@ void    osInit( int argc, char *argv[]  ) {
 /**
 * This function is responsible for creating all processes through the execution of the programs.
 * The arguments are all part of the process struct and they tell a process what to do when it
-* is created. It returns a fully functional process in whatever state is specified in the arument
+* is created. It returns a fully functional process in whatever state is specified in the argument
 * list. Example: if state == READY, the process would be added to the process list and the ready queue.
 */
 PCB* os_make_process(char* name, INT32 priority, INT32* error, void* entry_point, INT32 mode) {

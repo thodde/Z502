@@ -44,6 +44,12 @@ typedef struct {
 } MESSAGE;
 
 typedef struct {
+    INT32 page;
+    UINT32 starting_address;
+    UINT32 ending_address;
+} PAGE;
+
+typedef struct {
     INT32       pid;
     INT32       delay;
     char        name[MAX_NAME];
