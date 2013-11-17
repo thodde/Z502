@@ -1329,7 +1329,7 @@ void test2b(void) {
             printf("AN ERROR HAS OCCURRED.\n");
         Z502_REG5++;
     }
-}                            // End of test2b    
+}                            // End of test2b
 
 /**************************************************************************
 

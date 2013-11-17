@@ -44,10 +44,11 @@ typedef struct {
 } MESSAGE;
 
 typedef struct {
-    INT32 page;
-    UINT32 starting_address;
-    UINT32 ending_address;
-} PAGE;
+    INT32    time;
+    INT32    page;
+    INT32    frame;
+    void*    next;
+} FRAME_TABLE;
 
 typedef struct {
     INT32       pid;
@@ -85,5 +86,6 @@ void lock_read(void);
 void unlock_read(void);
 void lock_suspend(void);
 void unlock_suspend(void);
+INT32 find_empty_frame(INT32 page_num);
 
 #endif

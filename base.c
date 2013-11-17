@@ -46,6 +46,8 @@ PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;           // Holds all processes that exist
 
+FRAME_TABLE*       pageList = NULL;
+
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              last_context_switch = 0;  // the number of ticks since the last context switch
 
@@ -144,7 +146,8 @@ void    fault_handler( void )
     INT32       device_id;
     INT32       status;
     INT32       Index = 0;
-    PAGE*       return_page;
+    FRAME_TABLE* return_page;
+    INT32       frame = -1;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -167,11 +170,21 @@ void    fault_handler( void )
                 Z502Halt();
             }
 
-            if(Z502_PAGE_TBL_LENGTH == 0) {
-                Z502_PAGE_TBL_LENGTH = 1024;
-                Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
+            // see if there are any available frames
+            frame = find_empty_frame(status);
+
+            // if not, create a frame
+            if(frame == -1) {
+                if(Z502_PAGE_TBL_LENGTH == 0) {
+                    Z502_PAGE_TBL_LENGTH = 1024;
+                    Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
+                }
+                Z502_PAGE_TBL_ADDR[status] = virtual_address++;
             }
-            Z502_PAGE_TBL_ADDR[status] = virtual_address++;
+            else {
+                // if there was a frame, use it
+                Z502_PAGE_TBL_ADDR[status] = frame;
+            }
 
             break;
         default:
@@ -979,4 +992,25 @@ void lock_suspend() {
 void unlock_suspend() {
     INT32 lock_result;
     READ_MODIFY(MEMORY_INTERLOCK_BASE + 2, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
+
+/**********************************************************
+* All Memory management stuff is defined below here
+***********************************************************/
+INT32 find_empty_frame(INT32 page_num) {
+    INT32         currentTime;
+    FRAME_TABLE *ptrCheck = pageList;
+
+    while(ptrCheck != NULL) {
+        //this frame is free
+        if(ptrCheck->page == -1) {
+            MEM_READ(Z502ClockStatus, &currentTime);
+            ptrCheck->time = currentTime;
+            ptrCheck->page = page_num;
+            return ptrCheck->frame;
+        }
+        ptrCheck = ptrCheck->next;
+    }
+    //no empty frames
+    return -1;
 }
