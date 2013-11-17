@@ -30,8 +30,8 @@
 #define         WAITING_FOR_MESSAGE 1
 
 // LOCK STATES
-#define         LOCK                        1
-#define         UNLOCK                      0
+#define         DO_LOCK                        1
+#define         DO_UNLOCK                      0
 #define         SUSPEND_UNTIL_LOCKED        TRUE
 #define         DO_NOT_SUSPEND              FALSE
 
@@ -79,5 +79,11 @@ MESSAGE* remove_message(PCB* pcb, int index);
 int find_message_by_source(PCB* pcb, int source_pid);
 void clear_handled_broadcast_message();
 int find_handled_message(PCB* pcb);
+void lock_timer(void);
+void unlock_timer(void);
+void lock_read(void);
+void unlock_read(void);
+void lock_suspend(void);
+void unlock_suspend(void);
 
 #endif

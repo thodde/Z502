@@ -50,7 +50,7 @@ int                total_timer_pid = 0;    //counter for the number of PCBs in t
 INT32              last_context_switch = 0;  // the number of ticks since the last context switch
 
 BOOL add_next_to_timer = FALSE;
-BOOL interrupt_lock = TRUE;
+BOOL interrupt_lock = FALSE;
 
 char *call_names[] = { "mem_read ", "mem_write",
                        "read_mod ", "get_time ", "sleep    ",
@@ -114,17 +114,16 @@ void    interrupt_handler( void ) {
         case(DISK_INTERRUPT+9):
         case(DISK_INTERRUPT+10):
         case(DISK_INTERRUPT+11):
+            while(interrupt_lock);
             interrupt_lock = TRUE;
 
-            // TODO Make sure this is ok
-            // No idea if the Memory Address arg is correct or not but test 2B almost works!!!
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            lock_timer();
 
             // Need some function to move a process from the timer_queue to the ready_queue
             // and reset the time in here: something like dispatcher() ???
+            unlock_timer();
 
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
+            interrupt_lock = FALSE;
             break;
         default:
             printf("Unrecognized interrupt %i\n", device_id);
@@ -949,3 +948,35 @@ void clear_handled_broadcast_message() {
     }
 }
 
+/**
+* Locks for handling timers
+*/
+void lock_timer() {
+    INT32 lock_result;
+    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
+
+void unlock_timer() {
+    INT32 lock_result;
+    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
+
+//Ready Locks
+void lock_read() {
+    INT32 lock_result;
+    READ_MODIFY(MEMORY_INTERLOCK_BASE + 1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
+void unlock_ready() {
+    INT32 lock_result;
+    READ_MODIFY(MEMORY_INTERLOCK_BASE + 1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
+
+//Suspend Locks
+void lock_suspend() {
+    INT32 lock_result;
+    READ_MODIFY(MEMORY_INTERLOCK_BASE + 2, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
+void unlock_suspend() {
+    INT32 lock_result;
+    READ_MODIFY(MEMORY_INTERLOCK_BASE + 2, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+}
