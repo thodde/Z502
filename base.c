@@ -54,6 +54,9 @@ INT32              last_context_switch = 0;  // the number of ticks since the la
 BOOL add_next_to_timer = FALSE;
 BOOL interrupt_lock = FALSE;
 
+int memory_printer = 1;
+int scheduler_printer = 1;
+
 char *call_names[] = { "mem_read ", "mem_write",
                        "read_mod ", "get_time ", "sleep    ",
                        "get_pid  ", "create   ", "term_proc",
