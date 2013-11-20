@@ -31,7 +31,7 @@
 
 extern INT16 Z502_MODE;
 
-// These locations are global and define information about the page table
+// define information about the page table
 extern UINT16        *Z502_PAGE_TBL_ADDR;
 extern INT16         Z502_PAGE_TBL_LENGTH;
 
@@ -174,24 +174,25 @@ void    fault_handler( void )
             }
 
             // see if there are any available frames
-            frame = find_empty_frame(status);
+            //frame = find_empty_frame(status);
 
             // if not, create a frame
-            if(frame == -1) {
+            //if(frame == -1) {
                 if(Z502_PAGE_TBL_LENGTH == 0) {
                     Z502_PAGE_TBL_LENGTH = 1024;
                     Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
                 }
                 Z502_PAGE_TBL_ADDR[status] = virtual_address++;
-            }
-            else {
+            //}
+            //else {
                 // if there was a frame, use it
-                Z502_PAGE_TBL_ADDR[status] = frame;
-            }
+            //    Z502_PAGE_TBL_ADDR[status] = frame;
+            //}
 
             break;
         default:
             printf("Unrecognized device handler: %d\n", device_id);
+            //Z502Halt();
             break;
     }
 

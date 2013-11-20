@@ -75,7 +75,7 @@ typedef         int                             BOOL;
 ******************************************************************/
 
 #define         DO_DEVICE_DEBUG                 FALSE
-#define         DO_MEMORY_DEBUG                 FALSE
+#define         DO_MEMORY_DEBUG                 TRUE
 
 
         /* Meaning of locations in a page table entry          */
