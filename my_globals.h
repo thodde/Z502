@@ -44,11 +44,8 @@ typedef struct {
 } MESSAGE;
 
 typedef struct {
-    INT32    time;
-    INT32    page;
-    INT32    frame;
-    void*    next;
-} FRAME_TABLE;
+    BOOL in_use;
+} FRAME;
 
 typedef struct {
     INT32       pid;
@@ -82,10 +79,10 @@ void clear_handled_broadcast_message();
 int find_handled_message(PCB* pcb);
 void lock_timer(void);
 void unlock_timer(void);
-void lock_read(void);
+void lock_ready(void);
 void unlock_read(void);
 void lock_suspend(void);
 void unlock_suspend(void);
-INT32 find_empty_frame(INT32 page_num);
+UINT16 find_empty_frame();
 
 #endif

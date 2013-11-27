@@ -46,7 +46,8 @@ PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;           // Holds all processes that exist
 
-FRAME_TABLE*       pageList = NULL;
+//FRAME              frame_list[PHYS_MEM_PGS];
+FRAME*              frame_list;
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              last_context_switch = 0;  // the number of ticks since the last context switch
@@ -149,7 +150,6 @@ void    fault_handler( void )
     INT32       device_id;
     INT32       status;
     INT32       Index = 0;
-    FRAME_TABLE* return_page;
     INT32       frame = -1;
 
     // Get cause of interrupt
@@ -168,26 +168,37 @@ void    fault_handler( void )
             break;
         case INVALID_MEMORY:
 
-            // Make sure we are not out of virtual memory
+            // Make sure the page requested is valid
             if(status >= VIRTUAL_MEM_PGS) {
                 Z502Halt();
             }
 
-            // see if there are any available frames
-            //frame = find_empty_frame(status);
+            if(Z502_PAGE_TBL_LENGTH == 0) {
+                // initialize the page table
+                Z502_PAGE_TBL_LENGTH = VIRTUAL_MEM_PGS;
+                Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
+                frame_list = (FRAME*) calloc(sizeof(FRAME), PHYS_MEM_PGS);
+                //virtual_address = PTBL_VALID_BIT;
+            }
 
-            // if not, create a frame
-            //if(frame == -1) {
-                if(Z502_PAGE_TBL_LENGTH == 0) {
-                    Z502_PAGE_TBL_LENGTH = 1024;
-                    Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
+            if(Z502_PAGE_TBL_ADDR[status] == NULL) {
+                // The user is requesting a page that has not yet been created
+                frame = find_empty_frame();
+                if(frame == -1) {
+                    //TODO: FIX THIS LATER
+                    Z502Halt();
                 }
-                Z502_PAGE_TBL_ADDR[status] = virtual_address++;
-            //}
-            //else {
-                // if there was a frame, use it
-            //    Z502_PAGE_TBL_ADDR[status] = frame;
-            //}
+                else {
+                    Z502_PAGE_TBL_ADDR[status] = PTBL_VALID_BIT | frame;
+                }
+            }
+            else if(!(Z502_PAGE_TBL_ADDR[status] & PTBL_VALID_BIT)) {
+                // The requested page is invalid and is not in physical memory
+                printf("This is not a valid page.\n");
+            }
+            else {
+                printf("Catch all!\n");
+            }
 
             break;
         default:
@@ -565,8 +576,6 @@ void    osInit( int argc, char *argv[]  ) {
     INT32 error_response;
     void  *next_context;
     INT32 i;
-
-    virtual_address = PTBL_VALID_BIT;
 
     PCB* test_process;
     timer_queue = create_list();
@@ -979,7 +988,7 @@ void unlock_timer() {
 }
 
 //Ready Locks
-void lock_read() {
+void lock_ready() {
     INT32 lock_result;
     READ_MODIFY(MEMORY_INTERLOCK_BASE + 1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 }
@@ -1001,20 +1010,17 @@ void unlock_suspend() {
 /**********************************************************
 * All Memory management stuff is defined below here
 ***********************************************************/
-INT32 find_empty_frame(INT32 page_num) {
-    INT32         currentTime;
-    FRAME_TABLE *ptrCheck = pageList;
+UINT16 find_empty_frame() {
+    int i;
+    INT32 lock_result;
 
-    while(ptrCheck != NULL) {
-        //this frame is free
-        if(ptrCheck->page == -1) {
-            MEM_READ(Z502ClockStatus, &currentTime);
-            ptrCheck->time = currentTime;
-            ptrCheck->page = page_num;
-            return ptrCheck->frame;
+    for(i = 0; i < PHYS_MEM_PGS; i++) {
+        if((frame_list[i]).in_use == FALSE) {
+            frame_list[i].in_use = TRUE;
+            return i;
         }
-        ptrCheck = ptrCheck->next;
     }
+
     //no empty frames
     return -1;
 }
