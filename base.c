@@ -120,10 +120,7 @@ void    interrupt_handler( void ) {
         case(DISK_INTERRUPT+9):
         case(DISK_INTERRUPT+10):
         case(DISK_INTERRUPT+11):
-            while(interrupt_lock);
-            interrupt_lock = TRUE;
-
-            lock_timer();
+            //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             // Need some function to move a process from the timer_queue to the ready_queue
             // and reset the time in here: something like dispatcher() ???
@@ -151,6 +148,7 @@ void    fault_handler( void )
     INT32       status;
     INT32       Index = 0;
     INT32       frame = -1;
+    INT32       lock_result;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -178,7 +176,6 @@ void    fault_handler( void )
                 Z502_PAGE_TBL_LENGTH = VIRTUAL_MEM_PGS;
                 Z502_PAGE_TBL_ADDR = (UINT16*) calloc(sizeof(UINT16), Z502_PAGE_TBL_LENGTH);
                 frame_list = (FRAME*) calloc(sizeof(FRAME), PHYS_MEM_PGS);
-                //virtual_address = PTBL_VALID_BIT;
             }
 
             if(Z502_PAGE_TBL_ADDR[status] == NULL) {
@@ -190,6 +187,7 @@ void    fault_handler( void )
                 }
                 else {
                     Z502_PAGE_TBL_ADDR[status] = PTBL_VALID_BIT | frame;
+                    //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
                 }
             }
             else if(!(Z502_PAGE_TBL_ADDR[status] & PTBL_VALID_BIT)) {
