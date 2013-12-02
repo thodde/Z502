@@ -84,6 +84,9 @@ void    interrupt_handler( void ) {
     // Now read the status of this device
     MEM_READ(Z502InterruptStatus, &status );
 
+    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+    READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
     switch(device_id) {
         case(TIMER_INTERRUPT):
             MEM_READ(Z502ClockStatus, &Time);
@@ -120,18 +123,23 @@ void    interrupt_handler( void ) {
         case(DISK_INTERRUPT+9):
         case(DISK_INTERRUPT+10):
         case(DISK_INTERRUPT+11):
+
+            // grab the lock
             //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
-            // Need some function to move a process from the timer_queue to the ready_queue
-            // and reset the time in here: something like dispatcher() ???
-            unlock_timer();
+            //dispatcher();
 
-            interrupt_lock = FALSE;
+            // grab the lock
+            //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             break;
         default:
             printf("Unrecognized interrupt %i\n", device_id);
             break;
     }
+
+    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+    READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
@@ -187,7 +195,6 @@ void    fault_handler( void )
                 }
                 else {
                     Z502_PAGE_TBL_ADDR[status] = PTBL_VALID_BIT | frame;
-                    //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
                 }
             }
             else if(!(Z502_PAGE_TBL_ADDR[status] & PTBL_VALID_BIT)) {
@@ -233,6 +240,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     INT32               tmp_pid;
     long                disk_id;
     long                sector;
+    INT32               lock_result;
 
     call_type = (short)SystemCallData->SystemCallNumber;
 
@@ -349,6 +357,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
 
+            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             // Make sure we got a valid process
             if(process_handle != NULL) {
                 // Is the process running?
@@ -375,11 +386,18 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 // The process does not exist
                 *SystemCallData->Argument[1] = ERR_BAD_PARAM;
             }
+
+            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             break;
 
         case SYSNUM_RESUME_PROCESS:
             tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
+
+            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             // Make sure we got a valid process
             if(process_handle != NULL) {
@@ -398,11 +416,18 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 *SystemCallData->Argument[1] = ERR_BAD_PARAM;
             }
 
+            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             break;
 
         case SYSNUM_CHANGE_PRIORITY:
             tmp_pid = (int*)SystemCallData->Argument[0];
             INT32 new_priority = (int*)SystemCallData->Argument[1];
+
+            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             if (tmp_pid == -1)
                 process_handle = current_PCB;
             else
@@ -418,6 +443,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 process_handle->priority = new_priority;
                 *(SystemCallData->Argument[2]) = ERR_SUCCESS;
             }
+
+            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             break;
 
@@ -693,6 +721,7 @@ void os_destroy_process(PCB* pcb) {
  *  to the timer queue when they are sleeping
  */
 void dispatcher() {
+    INT32 lock_result;
     int i = 0;
     while (TRUE) {
 
@@ -748,9 +777,15 @@ void dispatcher() {
         ready_queue = build_ready_queue(process_list);
 
         if(ready_queue->data != NULL) {
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             PCB* process_to_run = ready_queue->data;
             process_to_run->state = RUNNING;
             free_ready_queue(ready_queue);
+
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
         }
@@ -970,39 +1005,6 @@ void clear_handled_broadcast_message() {
 
         cursor = cursor->next;
     }
-}
-
-/**
-* Locks for handling timers
-*/
-void lock_timer() {
-    INT32 lock_result;
-    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-}
-
-void unlock_timer() {
-    INT32 lock_result;
-    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-}
-
-//Ready Locks
-void lock_ready() {
-    INT32 lock_result;
-    READ_MODIFY(MEMORY_INTERLOCK_BASE + 1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-}
-void unlock_ready() {
-    INT32 lock_result;
-    READ_MODIFY(MEMORY_INTERLOCK_BASE + 1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-}
-
-//Suspend Locks
-void lock_suspend() {
-    INT32 lock_result;
-    READ_MODIFY(MEMORY_INTERLOCK_BASE + 2, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-}
-void unlock_suspend() {
-    INT32 lock_result;
-    READ_MODIFY(MEMORY_INTERLOCK_BASE + 2, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 }
 
 /**********************************************************
