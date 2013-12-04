@@ -49,10 +49,12 @@
 
 #define         SV_ACTIVE                       (short)0
 #define         SV_VALUE                        (short)1
+#define         SV_TID                          (short)2
+#define         SV_DIMENSION                    (short)3
 
 
 typedef struct
-    {
+{
     INT32               *queue;
     INT32               time_of_event;
     INT16               ring_buffer_location;
@@ -64,7 +66,7 @@ typedef struct
 /* Supports history which is dumped on a hardware panic */
 
 typedef struct
-    {
+{
     INT32               time_of_request;
     INT32               expected_time_of_event;
     INT32               real_time_of_event;
@@ -85,7 +87,7 @@ typedef struct
 } HARDWARE_STATS;
 
 typedef struct
-    {
+{
     INT32               *queue;
     INT16               structure_id;
     INT16               disk_id;
@@ -94,7 +96,7 @@ typedef struct
 } SECTOR;
 
 typedef struct
-    {
+{
     unsigned char       structure_id;
     void                *entry;
     UINT16              *page_table_ptr;
@@ -112,12 +114,12 @@ typedef struct
 // This is the information we need for each thread.
 
 typedef struct {
-	int OurLocalID;
-	int ThreadID;
-	int CurrentState;
-	Z502CONTEXT *Context;
-	UINT32 Condition;
-	UINT32 Mutex;
+    int OurLocalID;
+    int ThreadID;
+    int CurrentState;
+    Z502CONTEXT *Context;
+    UINT32 Condition;
+    UINT32 Mutex;
 } THREAD_INFO;
 
 // These are the states defined for a thread and stored in CurrentState
@@ -129,7 +131,7 @@ typedef struct {
 
 
 typedef struct
-    {
+{
     EVENT               *event_ptr;
     INT16               last_sector;
     INT16               disk_in_use;
@@ -137,14 +139,14 @@ typedef struct
 } DISK_STATE;
 
 typedef struct
-    {
+{
     INT16               sector;
     INT16               action;
     char                *buffer;
 } MEMORY_MAPPED_DISK_STATE;
 
 typedef struct
-    {
+{
     EVENT               *event_ptr;
     INT16               timer_in_use;
 } TIMER_STATE;

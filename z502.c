@@ -39,7 +39,8 @@
  It now runs off of multiple threads, and those
  threads start in the test code avoiding many
  many hacks.
-
+ 4.02 December   2013: STAT_VECTOR not thread safe.  Defined a method that
+                 uses thread info to keep things sorted out.
  ************************************************************************/
 
 /************************************************************************
@@ -50,7 +51,7 @@
 
  ************************************************************************/
 
-#define                   HARDWARE_VERSION  "4.00"
+#define                   HARDWARE_VERSION  "4.02"
 
 // By uncommenting these, we can get traces of what's happening in
 // the hardware.
@@ -101,7 +102,7 @@ void CreateSectorStruct(INT16, INT16, char **);
 void DequeueItemFromEventQueue(EVENT *, INT32 *);
 void DoMemoryDebug(INT16, INT16);
 void DoSleep(INT32 millisecs);
-int GetLock(UINT32 RequestedMutex, char *CallingRoutine);
+int  GetLock(UINT32 RequestedMutex, char *CallingRoutine);
 void GetNextEventTime(INT32 *);
 void GetSectorStructure(INT16, INT16, char **, INT32 *);
 void GetNextOrderedEvent(INT32 *, INT16 *, INT16 *, INT32 *);
@@ -158,7 +159,7 @@ long Z502_REG6;
 long Z502_REG7;
 long Z502_REG8;
 long Z502_REG9;
-INT16 STAT_VECTOR[SV_VALUE + 1][LARGEST_STAT_VECTOR_INDEX + 1];
+INT32 STAT_VECTOR[SV_DIMENSION][LARGEST_STAT_VECTOR_INDEX + 1];
 void *TO_VECTOR[TO_VECTOR_TYPES ];
 
 /*****************************************************************
@@ -491,7 +492,7 @@ void Z502MemoryReadModify(INT32 VirtualAddress, INT32 NewLockValue,
  *************************************************************************/
 
 void MemoryMappedIO(INT32 address, INT32 *data, BOOL read_or_write) {
-    static INT32 MemoryMappedIOInterruptDevice = -1;
+    // static INT32 MemoryMappedIOInterruptDevice = -1;
     static INT32 MemoryMappedIODiskDevice = -1;
     static MEMORY_MAPPED_DISK_STATE MemoryMappedDiskState;
     INT32 index;
@@ -510,28 +511,41 @@ void MemoryMappedIO(INT32 address, INT32 *data, BOOL read_or_write) {
         case Z502InterruptDevice: {
             if (read_or_write == SYSNUM_MEM_READ) {
                 *data = -1;
-                for (index = 0; index <= LARGEST_STAT_VECTOR_INDEX; index++)
-                    if (STAT_VECTOR[SV_ACTIVE ][index] != 0)
+                for (index = 0; index <= LARGEST_STAT_VECTOR_INDEX; index++) {
+                    if ( (STAT_VECTOR[SV_ACTIVE ][index] != 0)
+                            && (STAT_VECTOR[SV_TID    ][index] == GetMyTid() ) )
                         *data = index;
-            } else if (*data >= 0 && *data <= LARGEST_STAT_VECTOR_INDEX)
+                }
+            }
+            /* else if (*data >= 0 && *data <= LARGEST_STAT_VECTOR_INDEX)
                 MemoryMappedIOInterruptDevice = *data;
             else
                 MemoryMappedIOInterruptDevice = -1;
+                */
             break;
         }
 
         case Z502InterruptStatus: {
             *data = ERR_BAD_DEVICE_ID;
-            if (MemoryMappedIOInterruptDevice != -1)
-                *data = STAT_VECTOR[SV_VALUE ][MemoryMappedIOInterruptDevice];
+            for (index = 0; index <= LARGEST_STAT_VECTOR_INDEX; index++) {
+                if ( (STAT_VECTOR[SV_ACTIVE ][index] != 0)
+                        && (STAT_VECTOR[SV_TID    ][index] == GetMyTid() ) )   {
+                    *data = STAT_VECTOR[SV_VALUE ][index];
+                    // MemoryMappedIOInterruptDevice = -1;
+                }
+            }
             break;
         }
 
         case Z502InterruptClear: {
-            if (MemoryMappedIOInterruptDevice != -1 && *data == 0) {
-                STAT_VECTOR[SV_VALUE ][MemoryMappedIOInterruptDevice] = 0;
-                STAT_VECTOR[SV_ACTIVE ][MemoryMappedIOInterruptDevice] = 0;
-                MemoryMappedIOInterruptDevice = -1;
+            for (index = 0; index <= LARGEST_STAT_VECTOR_INDEX; index++) {
+                if ( (STAT_VECTOR[SV_ACTIVE ][index] != 0)
+                        && (STAT_VECTOR[SV_TID    ][index] == GetMyTid() ) )   {
+                    STAT_VECTOR[SV_VALUE  ][index] = 0;
+                    STAT_VECTOR[SV_ACTIVE ][index] = 0;
+                    STAT_VECTOR[SV_TID    ][index] = 0;
+                    // MemoryMappedIOInterruptDevice = -1;
+                }
             }
             break;
         }
@@ -561,15 +575,11 @@ void MemoryMappedIO(INT32 address, INT32 *data, BOOL read_or_write) {
                 MemoryMappedDiskState.buffer = (char *) -1;
             } else {
                 if (DO_DEVICE_DEBUG) {
-                    printf(
-                            "------ BEGIN DO_DEVICE DEBUG - IN Z502DiskSetID ---------------- \n");
-                    printf(
-                            "ERROR:  Trying to set device ID of the disk, but gave an invalid ID\n");
-                    printf(
-                            "You gave data of %d but it must be in the range of  1 =<  data  <= %d\n",
+                    printf( "------ BEGIN DO_DEVICE DEBUG - IN Z502DiskSetID ---------------- \n");
+                    printf( "ERROR:  Trying to set device ID of the disk, but gave an invalid ID\n");
+                    printf( "You gave data of %d but it must be in the range of  1 =<  data  <= %d\n",
                             *data, MAX_NUMBER_OF_DISKS);
-                    printf(
-                            "-------- END DO_DEVICE DEBUG - ----------------------------------\n");
+                    printf( "-------- END DO_DEVICE DEBUG - ----------------------------------\n");
                 }
             }
             break;
@@ -987,7 +997,7 @@ void HardwareTimer(INT32 time_to_delay) {
         timer_state.timer_in_use = FALSE;
     }
 
-    if (time_to_delay < 0) {   // Illegal time
+    if (time_to_delay < 0) {   // Illegal time  
         AddEventToInterruptQueue(CurrentSimulationTime, TIMER_INTERRUPT,
                 (INT16) ERR_BAD_PARAM, &timer_state.event_ptr);
         return;
@@ -1282,7 +1292,7 @@ void Z502SwitchContext(BOOL kill_or_save, void **IncomingContextPointer) {
         }
 
         if (kill_or_save == SWITCH_CONTEXT_SAVE_MODE) {
-            //		curr_ptr->call_type = SYS_CALL_CALL_TYPE;
+            //        curr_ptr->call_type = SYS_CALL_CALL_TYPE;
             curr_ptr->reg1 = Z502_REG1;
             curr_ptr->reg2 = Z502_REG2;
             curr_ptr->reg3 = Z502_REG3;
@@ -1296,7 +1306,6 @@ void Z502SwitchContext(BOOL kill_or_save, void **IncomingContextPointer) {
             curr_ptr->page_table_len = Z502_PAGE_TBL_LENGTH;
         }
     }                           // End of current context not null
-
 
     //  NOW we will be working with the NEXT context
     curr_ptr = *context_ptr;    // This will be the NEW context
@@ -1407,8 +1416,8 @@ void HardwareInterrupt(void) {
             GetNextEventTime(&time_of_event);
             // PrintEventQueue( );
 #ifdef DEBUG_CONDITION
-			printf("Hardware_Interrupt: time = %d: next event = %d\n",
-					CurrentSimulationTime, time_of_event);
+            printf("Hardware_Interrupt: time = %d: next event = %d\n",
+                    CurrentSimulationTime, time_of_event);
 #endif
         }
 
@@ -1440,7 +1449,8 @@ void HardwareInterrupt(void) {
             for (index = DISK_INTERRUPT ;
                  index <= DISK_INTERRUPT + MAX_NUMBER_OF_DISKS - 1;
                  index++) {
-                if (STAT_VECTOR[SV_ACTIVE ][index] != 0) {
+                if ( (STAT_VECTOR[SV_ACTIVE ][index] != 0)
+                        && (STAT_VECTOR[SV_TID    ][index] == GetMyTid()  ) ) {
                     // Bugfix 08/2012 - disk_state contains MAX_NUMBER_OF_DISKS elements
                     // We were spraying some unknown memory locations
                     disk_state[index - DISK_INTERRUPT ].disk_in_use = FALSE;
@@ -1465,22 +1475,20 @@ void HardwareInterrupt(void) {
 
         /*  NOTE: The hardware clears these in main, but not after that     */
         STAT_VECTOR[SV_ACTIVE ][event_type] = 1;
-        STAT_VECTOR[SV_VALUE ][event_type] = event_error;
+        STAT_VECTOR[SV_VALUE  ][event_type] = event_error;
+        STAT_VECTOR[SV_TID    ][event_type] = GetMyTid();
 
         if (DO_DEVICE_DEBUG) {
-            printf(
-                    "------ BEGIN DO_DEVICE DEBUG - CALLING INTERRUPT HANDLER --------- \n");
-            printf(
-                    "The time is now = %d: Handling event that was scheduled to happen at = %d\n",
+            printf( "------ BEGIN DO_DEVICE DEBUG - CALLING INTERRUPT HANDLER --------- \n");
+            printf( "The time is now = %d: Handling event that was scheduled to happen at = %d\n",
                     CurrentSimulationTime, time_of_event);
-            printf(
-                    "The hardware is now about to enter your interrupt_handler in base.c\n");
+            printf( "The hardware is now about to enter your interrupt_handler in base.c\n");
             printf("-------- END DO_DEVICE DEBUG - ---------------------- \n");
         }
 
         //  If we've come here from Z502_IDLE, then the current time may be
         // less than the event time. Then we must increase the
-        // CurrentSimulationTime to match the time given by the event.
+        // CurrentSimulationTime to match the time given by the event.  
         //
         // if ( ( INT32 )CurrentSimulationTime < time_of_event )
         // CurrentSimulationTime              = time_of_event;
@@ -1507,7 +1515,7 @@ void HardwareInterrupt(void) {
 
         ReleaseLock(HardwareLock, "HardwareInterrupt-3");
         NumberOfInterruptsCompleted++;
-    }         // End of while TRUE
+    }         // End of while TRUE       
 }                 // End of HardwareInterrupt  
 
 /*****************************************************************
@@ -1525,7 +1533,8 @@ void HardwareFault(INT16 fault_type, INT16 argument) {
     void (*fault_handler)(void);
 
     STAT_VECTOR[SV_ACTIVE ][fault_type] = 1;
-    STAT_VECTOR[SV_VALUE ][fault_type] = (INT16) argument;
+    STAT_VECTOR[SV_VALUE  ][fault_type] = (INT16) argument;
+    STAT_VECTOR[SV_TID    ][fault_type] = GetMyTid();
     Z502_MODE = KERNEL_MODE;
     HardwareStats.number_faults++;
     fault_handler = (void (*)(void)) TO_VECTOR[TO_VECTOR_FAULT_HANDLER_ADDR ];
@@ -1563,7 +1572,8 @@ void SoftwareTrap(void) {
     trap_handler = (void (*)(void)) TO_VECTOR[TO_VECTOR_TRAP_HANDLER_ADDR ];
     (*trap_handler)();
     STAT_VECTOR[SV_ACTIVE ][SOFTWARE_TRAP ] = 0;
-    STAT_VECTOR[SV_VALUE ][SOFTWARE_TRAP ] = 0;
+    STAT_VECTOR[SV_VALUE  ][SOFTWARE_TRAP ] = 0;
+    STAT_VECTOR[SV_TID    ][SOFTWARE_TRAP ] = 0;
 
 }             // End of SoftwareTrap
 
@@ -2049,18 +2059,18 @@ void CreateSectorStruct(INT16 disk_id, INT16 sector, char **returned_sector_ptr)
  **************************************************************************/
 void PrintThreadTable(char *Explanation) {
 #ifdef     DEBUG_USER_THREADS
-	int i = 0;
-	printf("\n\n");
-	printf("%s", Explanation);
-	for (i = 0; i < MAX_NUMBER_OF_USER_THREADS; i++) {
-		if (ThreadTable[i].CurrentState > 2) {
-			printf(
-					"LocalID: %d  ThreadID:  %d   CurrentState:  %d   Context:  %x  Condition: %d   Mutex  %d\n",
-					ThreadTable[i].OurLocalID, ThreadTable[i].ThreadID,
-					ThreadTable[i].CurrentState,(unsigned long) ThreadTable[i].Context,
-					ThreadTable[i].Condition, ThreadTable[i].Mutex);
-		}
-	}
+    int i = 0;
+    printf("\n\n");
+    printf("%s", Explanation);
+    for (i = 0; i < MAX_NUMBER_OF_USER_THREADS; i++) {
+        if (ThreadTable[i].CurrentState > 2) {
+            printf(
+                    "LocalID: %d  ThreadID:  %d   CurrentState:  %d   Context:  %x  Condition: %d   Mutex  %d\n",
+                    ThreadTable[i].OurLocalID, ThreadTable[i].ThreadID,
+                    ThreadTable[i].CurrentState,(unsigned long) ThreadTable[i].Context,
+                    ThreadTable[i].Condition, ThreadTable[i].Mutex);
+        }
+    }
 #endif
 }                           // End of PrintThreadTable
 
@@ -2285,44 +2295,44 @@ void SuspendProcessExecution(Z502CONTEXT *Context) {
 
 int CreateAThread(void *ThreadStartAddress, INT32 *data) {
 #ifdef  NT
-	DWORD ThreadID;
-	HANDLE ThreadHandle;
-	if ((ThreadHandle = CreateThread(NULL, 0,
-			(LPTHREAD_START_ROUTINE) ThreadStartAddress, (LPVOID) data,
-			(DWORD) 0, &ThreadID)) == NULL ) {
-		printf("Unable to create thread in CreateAThread\n");
-		GoToExit(0);
-	}
-	return ((int) ThreadID);
+    DWORD ThreadID;
+    HANDLE ThreadHandle;
+    if ((ThreadHandle = CreateThread(NULL, 0,
+            (LPTHREAD_START_ROUTINE) ThreadStartAddress, (LPVOID) data,
+            (DWORD) 0, &ThreadID)) == NULL ) {
+        printf("Unable to create thread in CreateAThread\n");
+        GoToExit(0);
+    }
+    return ((int) ThreadID);
 #endif
 
 #if defined LINUX || defined MAC
-	int ReturnCode;
-	// int                  SchedPolicy = SCHED_FIFO;   // not used
-	int policy;
-	struct sched_param param;
-	pthread_t Thread;
-	pthread_attr_t Attribute;
+    int ReturnCode;
+    // int                  SchedPolicy = SCHED_FIFO;   // not used
+    int policy;
+    struct sched_param param;
+    pthread_t Thread;
+    pthread_attr_t Attribute;
 
-	ReturnCode = pthread_attr_init( &Attribute );
-	if ( ReturnCode != FALSE )
-	printf( "Error in pthread_attr_init in CreateAThread\n" );
-	ReturnCode = pthread_attr_setdetachstate( &Attribute, PTHREAD_CREATE_JOINABLE );
-	if ( ReturnCode != FALSE )
-	printf( "Error in pthread_attr_setdetachstate in CreateAThread\n" );
-	ReturnCode = pthread_create( &Thread, &Attribute, ThreadStartAddress, data );
-	if ( ReturnCode == EINVAL ) /* Will return 0 if successful */
-	printf( "ERROR doing pthread_create - The Thread, attr or sched param is wrong\n");
-	if ( ReturnCode == EAGAIN ) /* Will return 0 if successful */
-	printf( "ERROR doing pthread_create - Resources not available\n");
-	if ( ReturnCode == EPERM ) /* Will return 0 if successful */
-	printf( "ERROR doing pthread_create - No privileges to do this sched type & prior.\n");
+    ReturnCode = pthread_attr_init( &Attribute );
+    if ( ReturnCode != FALSE )
+    printf( "Error in pthread_attr_init in CreateAThread\n" );
+    ReturnCode = pthread_attr_setdetachstate( &Attribute, PTHREAD_CREATE_JOINABLE );
+    if ( ReturnCode != FALSE )
+    printf( "Error in pthread_attr_setdetachstate in CreateAThread\n" );
+    ReturnCode = pthread_create( &Thread, &Attribute, ThreadStartAddress, data );
+    if ( ReturnCode == EINVAL ) /* Will return 0 if successful */
+    printf( "ERROR doing pthread_create - The Thread, attr or sched param is wrong\n");
+    if ( ReturnCode == EAGAIN ) /* Will return 0 if successful */
+    printf( "ERROR doing pthread_create - Resources not available\n");
+    if ( ReturnCode == EPERM ) /* Will return 0 if successful */
+    printf( "ERROR doing pthread_create - No privileges to do this sched type & prior.\n");
 
-	ReturnCode = pthread_attr_destroy( &Attribute );
-	if ( ReturnCode ) /* Will return 0 if successful */
-	printf( "Error in pthread_mutexattr_destroy in CreateAThread\n" );
-	ReturnCode = pthread_getschedparam( Thread, &policy, &param);
-	return( (int)Thread );
+    ReturnCode = pthread_attr_destroy( &Attribute );
+    if ( ReturnCode ) /* Will return 0 if successful */
+    printf( "Error in pthread_mutexattr_destroy in CreateAThread\n" );
+    ReturnCode = pthread_getschedparam( Thread, &policy, &param);
+    return( (int)Thread );
 #endif
 }                                // End of CreateAThread 
 /**************************************************************************
@@ -2331,7 +2341,7 @@ int CreateAThread(void *ThreadStartAddress, INT32 *data) {
 
 void DestroyThread(INT32 ExitCode) {
 #ifdef   NT
-	ExitThread((DWORD) ExitCode);
+    ExitThread((DWORD) ExitCode);
 #endif
 
 #if defined LINUX || defined MAC
@@ -2362,38 +2372,38 @@ void DestroyThread(INT32 ExitCode) {
 
 void ChangeThreadPriority(INT32 PriorityDirection) {
 #ifdef   NT
-	INT32 ReturnValue;
-	HANDLE MyThreadID;
-	MyThreadID = GetCurrentThread();
-	if (PriorityDirection == MORE_FAVORABLE_PRIORITY)
-		ReturnValue = (INT32) SetThreadPriority(MyThreadID,
-				THREAD_PRIORITY_ABOVE_NORMAL);
-	if (PriorityDirection == LESS_FAVORABLE_PRIORITY)
-		ReturnValue = (INT32) SetThreadPriority(MyThreadID,
-				THREAD_PRIORITY_BELOW_NORMAL);
-	if (ReturnValue == 0) {
-		printf("ERROR:  SetThreadPriority failed in ChangeThreadPriority\n");
-		HandleWindowsError();
-	}
+    INT32 ReturnValue;
+    HANDLE MyThreadID;
+    MyThreadID = GetCurrentThread();
+    if (PriorityDirection == MORE_FAVORABLE_PRIORITY)
+        ReturnValue = (INT32) SetThreadPriority(MyThreadID,
+                THREAD_PRIORITY_ABOVE_NORMAL);
+    if (PriorityDirection == LESS_FAVORABLE_PRIORITY)
+        ReturnValue = (INT32) SetThreadPriority(MyThreadID,
+                THREAD_PRIORITY_BELOW_NORMAL);
+    if (ReturnValue == 0) {
+        printf("ERROR:  SetThreadPriority failed in ChangeThreadPriority\n");
+        HandleWindowsError();
+    }
 
 #endif
 #if defined LINUX || defined MAC
-	// 09/2011 - I have attempted to make the interrupt thread a higher priority
-	// than the base thread but have not been successful.  It's possible to change
-	// the "nice" value for the whole process, but not for individual threads.
-	//int                  policy;
-	//struct sched_param   param;
-	//int                  CurrentPriority;
-	//CurrentPriority = getpriority( PRIO_PROCESS, 0 );
-	//ReturnValue = setpriority( PRIO_PROCESS, 0, CurrentPriority - PriorityDirection );
-	//ReturnValue = setpriority( PRIO_PROCESS, 0, 15 );
-	//CurrentPriority = getpriority( PRIO_PROCESS, 0 );
-	//ReturnValue = pthread_getschedparam( GetMyTid(), &policy, &param);
+    // 09/2011 - I have attempted to make the interrupt thread a higher priority
+    // than the base thread but have not been successful.  It's possible to change
+    // the "nice" value for the whole process, but not for individual threads.
+    //int                  policy;
+    //struct sched_param   param;
+    //int                  CurrentPriority;
+    //CurrentPriority = getpriority( PRIO_PROCESS, 0 );
+    //ReturnValue = setpriority( PRIO_PROCESS, 0, CurrentPriority - PriorityDirection );
+    //ReturnValue = setpriority( PRIO_PROCESS, 0, 15 );
+    //CurrentPriority = getpriority( PRIO_PROCESS, 0 );
+    //ReturnValue = pthread_getschedparam( GetMyTid(), &policy, &param);
 
-	//if ( ReturnValue == ESRCH || ReturnValue == EINVAL || ReturnValue == EPERM )
-	//    printf( "ERROR in ChangeThreadPriority - Input parameters are wrong\n");
-	//if ( ReturnValue == EACCES )
-	//    printf( "ERROR in ChangeThreadPriority - Not privileged to do this!!\n");
+    //if ( ReturnValue == ESRCH || ReturnValue == EINVAL || ReturnValue == EPERM )
+    //    printf( "ERROR in ChangeThreadPriority - Input parameters are wrong\n");
+    //if ( ReturnValue == EACCES )
+    //    printf( "ERROR in ChangeThreadPriority - Not privileged to do this!!\n");
 
 #endif
 }                         // End of ChangeThreadPriority   
@@ -2404,10 +2414,10 @@ void ChangeThreadPriority(INT32 PriorityDirection) {
  **************************************************************************/
 int GetMyTid() {
 #ifdef   NT
-	return ((int) GetCurrentThreadId());
+    return ((int) GetCurrentThreadId());
 #endif
 #ifdef   LINUX
-	return( (int)pthread_self() );
+    return( (int)pthread_self() );
 #endif
 #ifdef   MAC
     return( (unsigned long int)pthread_self() );
@@ -2457,31 +2467,30 @@ int BaseThread() {
 void CreateLock(INT32 *RequestedMutex, char *CallingRoutine) {
     int ErrorFound = FALSE;
 #ifdef NT
-	HANDLE MemoryMutex;
-	// Create with no security, no initial ownership, and no name
-	if ((MemoryMutex = CreateMutex(NULL, FALSE, NULL )) == NULL )
-		ErrorFound = TRUE;
-	*RequestedMutex = (UINT32) MemoryMutex;
+    HANDLE MemoryMutex;
+    // Create with no security, no initial ownership, and no name
+    if ((MemoryMutex = CreateMutex(NULL, FALSE, NULL )) == NULL )
+        ErrorFound = TRUE;
+    *RequestedMutex = (UINT32) MemoryMutex;
 #endif
 #if defined LINUX || defined MAC
 
-	pthread_mutexattr_t Attribute;
+    pthread_mutexattr_t Attribute;
 
-	ErrorFound = pthread_mutexattr_init( &Attribute );
-	if ( ErrorFound != FALSE )
-	printf( "Error in pthread_mutexattr_init in CreateLock\n" );
-	//ErrorFound = pthread_mutexattr_settype( &Attribute, PTHREAD_MUTEX_ERRORCHECK_NP );
-	ErrorFound = pthread_mutexattr_settype( &Attribute, PTHREAD_MUTEX_ERRORCHECK );
-	if ( ErrorFound != FALSE )
-	printf( "Error in pthread_mutexattr_settype in CreateLock\n" );
-	ErrorFound = pthread_mutex_init( &(LocalMutex[NextMutexToAllocate]), &Attribute );
-	if ( ErrorFound ) /* Will return 0 if successful */
-	printf( "Error in pthread_mutex_init in CreateLock\n" );
-	ErrorFound = pthread_mutexattr_destroy( &Attribute );
-	if ( ErrorFound ) /* Will return 0 if successful */
-	printf( "Error in pthread_mutexattr_destroy in CreateLock\n" );
-	*RequestedMutex = NextMutexToAllocate;
-	NextMutexToAllocate++;
+    ErrorFound = pthread_mutexattr_init( &Attribute );
+    if ( ErrorFound != FALSE )
+    printf( "Error in pthread_mutexattr_init in CreateLock\n" );
+    ErrorFound = pthread_mutexattr_settype( &Attribute, PTHREAD_MUTEX_ERRORCHECK );
+    if ( ErrorFound != FALSE )
+    printf( "Error in pthread_mutexattr_settype in CreateLock\n" );
+    ErrorFound = pthread_mutex_init( &(LocalMutex[NextMutexToAllocate]), &Attribute );
+    if ( ErrorFound ) /* Will return 0 if successful */
+    printf( "Error in pthread_mutex_init in CreateLock\n" );
+    ErrorFound = pthread_mutexattr_destroy( &Attribute );
+    if ( ErrorFound ) /* Will return 0 if successful */
+    printf( "Error in pthread_mutexattr_destroy in CreateLock\n" );
+    *RequestedMutex = NextMutexToAllocate;
+    NextMutexToAllocate++;
 #endif
     if (ErrorFound == TRUE) {
         printf("We were unable to create a mutex in CreateLock\n");
@@ -2506,38 +2515,38 @@ int GetTryLock(UINT32 RequestedMutex, char *CallingRoutine) {
     int ReturnValue = FALSE;
     int LockReturn;
 #ifdef   NT
-	HANDLE MemoryMutex;
+    HANDLE MemoryMutex;
 #endif
 
     PrintLockDebug(LOCK_TRY, CallingRoutine, RequestedMutex, LOCK_ENTER);
 #ifdef   NT
-	MemoryMutex = (HANDLE) RequestedMutex;
-	LockReturn = (int) WaitForSingleObject(MemoryMutex, 1);
+    MemoryMutex = (HANDLE) RequestedMutex;
+    LockReturn = (int) WaitForSingleObject(MemoryMutex, 1);
 //      printf( "Code Returned in GetTryLock is %d\n", LockReturn );
-	if (LockReturn == WAIT_FAILED ) {
-		printf("Internal error in GetTryLock\n");
-		HandleWindowsError();
-		GoToExit(0);
-	}
-	if (LockReturn == WAIT_TIMEOUT)   // Timeout occurred with no lock
-		ReturnValue = FALSE;
-	if (LockReturn == WAIT_OBJECT_0)   // Lock was obtained
-		ReturnValue = TRUE;
+    if (LockReturn == WAIT_FAILED ) {
+        printf("Internal error in GetTryLock\n");
+        HandleWindowsError();
+        GoToExit(0);
+    }
+    if (LockReturn == WAIT_TIMEOUT)   // Timeout occurred with no lock
+        ReturnValue = FALSE;
+    if (LockReturn == WAIT_OBJECT_0)   // Lock was obtained
+        ReturnValue = TRUE;
 #endif
 #if defined LINUX || defined MAC
-	LockReturn = pthread_mutex_trylock( &(LocalMutex[RequestedMutex]) );
+    LockReturn = pthread_mutex_trylock( &(LocalMutex[RequestedMutex]) );
 //    printf( "Code Returned in GetTRyLock is %d\n", LockReturn );
 
-	if ( LockReturn == EINVAL )
-	printf( "PANIC in GetTryLock - mutex isn't initialized\n");
-	if ( LockReturn == EFAULT )
-	printf( "PANIC in GetTryLock - illegal address for mutex\n");
-	if ( LockReturn == EBUSY )//  Already locked by another thread
-	ReturnValue = FALSE;
-	if ( LockReturn == EDEADLK )//  Already locked by this thread
-	ReturnValue = TRUE;// Here we eat this error
-	if ( LockReturn == 0 )//  Not previously locked - all OK
-	ReturnValue = TRUE;
+    if ( LockReturn == EINVAL )
+    printf( "PANIC in GetTryLock - mutex isn't initialized\n");
+    if ( LockReturn == EFAULT )
+    printf( "PANIC in GetTryLock - illegal address for mutex\n");
+    if ( LockReturn == EBUSY )//  Already locked by another thread
+    ReturnValue = FALSE;
+    if ( LockReturn == EDEADLK )//  Already locked by this thread
+    ReturnValue = TRUE;// Here we eat this error
+    if ( LockReturn == 0 )//  Not previously locked - all OK
+    ReturnValue = TRUE;
 #endif
     PrintLockDebug(LOCK_TRY, CallingRoutine, RequestedMutex, LOCK_EXIT);
     return (ReturnValue);
@@ -2556,18 +2565,18 @@ int GetLock(UINT32 RequestedMutex, char *CallingRoutine) {
     INT32 LockReturn;
     int ReturnValue = FALSE;
 #ifdef   NT
-	HANDLE MemoryMutex = (HANDLE) RequestedMutex;
+    HANDLE MemoryMutex = (HANDLE) RequestedMutex;
 #endif
     PrintLockDebug(LOCK_GET, CallingRoutine, RequestedMutex, LOCK_ENTER);
 #ifdef   NT
-	LockReturn = WaitForSingleObject(MemoryMutex, INFINITE);
-	if (LockReturn != 0) {
-		printf("Internal error waiting for a lock in GetLock\n");
-		HandleWindowsError();
-		GoToExit(0);
-	}
-	if (LockReturn == 0)    //  Not previously locked - all OK
-		ReturnValue = TRUE;
+    LockReturn = WaitForSingleObject(MemoryMutex, INFINITE);
+    if (LockReturn != 0) {
+        printf("Internal error waiting for a lock in GetLock\n");
+        HandleWindowsError();
+        GoToExit(0);
+    }
+    if (LockReturn == 0)    //  Not previously locked - all OK
+        ReturnValue = TRUE;
 #endif
 
 #if defined LINUX || defined MAC
@@ -2576,20 +2585,20 @@ int GetLock(UINT32 RequestedMutex, char *CallingRoutine) {
 //            printf("GetLock:  %d %d %d\n", RequestedMutex, 
 //                    (int)LocalMutex[RequestedMutex], GetMyTid() );
 //        }
-	LockReturn = pthread_mutex_lock( &(LocalMutex[RequestedMutex]) );
-	if ( LockReturn == EINVAL )
-	printf( "PANIC in GetLock - mutex isn't initialized\n");
-	if ( LockReturn == EFAULT )
-	printf( "PANIC in GetLock - illegal address for mutex\n");
+    LockReturn = pthread_mutex_lock( &(LocalMutex[RequestedMutex]) );
+    if ( LockReturn == EINVAL )
+    printf( "PANIC in GetLock - mutex isn't initialized\n");
+    if ( LockReturn == EFAULT )
+    printf( "PANIC in GetLock - illegal address for mutex\n");
 
-	// Note that LINUX acts differently from Windows.  We will eat the
-	// error here to get compatibility.
-	if ( LockReturn == EDEADLK ) {  //  Already locked by this thread
-		LockReturn = 0;
-		// printf( "ERROR - Already locked by this thread\n");
-	}
-	if ( LockReturn == 0 )  //  Not previously locked - all OK
-	ReturnValue = TRUE;
+    // Note that LINUX acts differently from Windows.  We will eat the
+    // error here to get compatibility.
+    if ( LockReturn == EDEADLK ) {  //  Already locked by this thread
+        LockReturn = 0;
+        // printf( "ERROR - Already locked by this thread\n");
+    }
+    if ( LockReturn == 0 )  //  Not previously locked - all OK
+    ReturnValue = TRUE;
 #endif
     PrintLockDebug(LOCK_GET, CallingRoutine, RequestedMutex, LOCK_EXIT);
     return (ReturnValue);
@@ -2605,28 +2614,28 @@ int ReleaseLock(UINT32 RequestedMutex, char* CallingRoutine) {
     int ReturnValue = FALSE;
     int LockReturn;
 #ifdef   NT
-	HANDLE MemoryMutex = (HANDLE) RequestedMutex;
+    HANDLE MemoryMutex = (HANDLE) RequestedMutex;
 #endif
     PrintLockDebug(LOCK_RELEASE, CallingRoutine, RequestedMutex, LOCK_ENTER);
 
 #ifdef   NT
-	LockReturn = ReleaseMutex(MemoryMutex);
+    LockReturn = ReleaseMutex(MemoryMutex);
 
-	if (LockReturn != 0)    // Lock was released
-		ReturnValue = TRUE;
+    if (LockReturn != 0)    // Lock was released
+        ReturnValue = TRUE;
 #endif
 #if defined LINUX || defined MAC
-	LockReturn = pthread_mutex_unlock( &(LocalMutex[RequestedMutex]) );
+    LockReturn = pthread_mutex_unlock( &(LocalMutex[RequestedMutex]) );
 //    printf( "Return Code in Release Lock = %d\n", LockReturn );
 
-	if ( LockReturn == EINVAL )
-	printf( "PANIC in ReleaseLock - mutex isn't initialized\n");
-	if ( LockReturn == EFAULT )
-	printf( "PANIC in ReleaseLock - illegal address for mutex\n");
-	if ( LockReturn == EPERM )//  Not owned by this thread
-	printf( "ERROR - Lock is not currently locked by this thread.\n");
-	if ( LockReturn == 0 )//  Successfully unlocked - all OK
-	ReturnValue = TRUE;
+    if ( LockReturn == EINVAL )
+    printf( "PANIC in ReleaseLock - mutex isn't initialized\n");
+    if ( LockReturn == EFAULT )
+    printf( "PANIC in ReleaseLock - illegal address for mutex\n");
+    if ( LockReturn == EPERM )//  Not owned by this thread
+    printf( "ERROR - Lock is not currently locked by this thread.\n");
+    if ( LockReturn == 0 )//  Successfully unlocked - all OK
+    ReturnValue = TRUE;
 #endif
     PrintLockDebug(LOCK_RELEASE, CallingRoutine, RequestedMutex, LOCK_EXIT);
     return (ReturnValue);
@@ -2659,215 +2668,215 @@ void Quickie(int LockID, int x) {
 }
 void PrintLockDebug(int Action, char *LockCaller, int Mutex, int Return) {
 #ifdef  DEBUG_LOCKS
-	int MyTid, i, j, LockID;
-	char TaskID[120], WhichLock[120];
-	char Direction[120];
-	char Output[120];
-	char ProblemReport[120];           // Reports something not-normal
-	char LockAction[120];              // What type of lock is calling us
-	static int FirstTime = TRUE;
+    int MyTid, i, j, LockID;
+    char TaskID[120], WhichLock[120];
+    char Direction[120];
+    char Output[120];
+    char ProblemReport[120];           // Reports something not-normal
+    char LockAction[120];              // What type of lock is calling us
+    static int FirstTime = TRUE;
 
-	// Don't do anything if we're logging ourself
-	if ( strncmp(LockCaller, "PLD", 3) == 0 )
-		return;
-	// This is the initialization the first time we come in here
-	if (FirstTime) {
-		FirstTime = FALSE;
-		CreateLock( &PLDLock, "PLD");
-		for (i = 0; i < MAX_NUMBER_OF_LOCKS; i++) {
-			LockDB.LockCount[i] = 0;
-			//	LockDB.LockOwner[i] = 0;
-			LockDB.LockID[i] = 0;
-			for (j = 0; j < MAX_NUMBER_OF_LOCKERS; j++) {
-				LockDB.LockOwners[i][j] = 0;
-			}
-		}
-		LockDB.NumberOfLocks = 0;
-	}
+    // Don't do anything if we're logging ourself
+    if ( strncmp(LockCaller, "PLD", 3) == 0 )
+        return;
+    // This is the initialization the first time we come in here
+    if (FirstTime) {
+        FirstTime = FALSE;
+        CreateLock( &PLDLock, "PLD");
+        for (i = 0; i < MAX_NUMBER_OF_LOCKS; i++) {
+            LockDB.LockCount[i] = 0;
+            //    LockDB.LockOwner[i] = 0;
+            LockDB.LockID[i] = 0;
+            for (j = 0; j < MAX_NUMBER_OF_LOCKERS; j++) {
+                LockDB.LockOwners[i][j] = 0;
+            }
+        }
+        LockDB.NumberOfLocks = 0;
+    }
 
-	GetLock(PLDLock, "PLD");
-	// Find the string for the type of lock we're doing.
-	if (Action == LOCK_CREATE)
-		strcpy(LockAction, "CreLock");
-	if (Action == LOCK_TRY)
-		strcpy(LockAction, "TryLock");
-	if (Action == LOCK_GET)
-		strcpy(LockAction, "GetLock");
-	if (Action == LOCK_RELEASE)
-		strcpy(LockAction, "RelLock");
+    GetLock(PLDLock, "PLD");
+    // Find the string for the type of lock we're doing.
+    if (Action == LOCK_CREATE)
+        strcpy(LockAction, "CreLock");
+    if (Action == LOCK_TRY)
+        strcpy(LockAction, "TryLock");
+    if (Action == LOCK_GET)
+        strcpy(LockAction, "GetLock");
+    if (Action == LOCK_RELEASE)
+        strcpy(LockAction, "RelLock");
 
-	// Determine if we are "Base" or "interrupt" - Actually there are many
-	// Possible base threads - and we will print out which one.
-	MyTid = GetMyTid();
-	strcpy(TaskID, "Base ");
-	if (MyTid == InterruptTid) {
-		strcpy(TaskID, "Int  ");
-	}
+    // Determine if we are "Base" or "interrupt" - Actually there are many
+    // Possible base threads - and we will print out which one.
+    MyTid = GetMyTid();
+    strcpy(TaskID, "Base ");
+    if (MyTid == InterruptTid) {
+        strcpy(TaskID, "Int  ");
+    }
 
-	// Identify which lock we're working on.  Some of the common ones are named,
-	//   But many are associated with individual threads, or with locks created
-	//   by students in which case they will be named  "Oth...".
+    // Identify which lock we're working on.  Some of the common ones are named,
+    //   But many are associated with individual threads, or with locks created
+    //   by students in which case they will be named  "Oth...".
 
-	sprintf(WhichLock, "Oth%d   ", Mutex);
-	if (Mutex == EventLock)
-		strcpy(WhichLock, "Event  ");
-	if (Mutex == InterruptLock)
-		strcpy(WhichLock, "Int    ");
-	if (Mutex == HardwareLock)
-		strcpy(WhichLock, "Hard   ");
-	if (Mutex == ThreadTableLock)
-		strcpy(WhichLock, "T-Tbl  ");
+    sprintf(WhichLock, "Oth%d   ", Mutex);
+    if (Mutex == EventLock)
+        strcpy(WhichLock, "Event  ");
+    if (Mutex == InterruptLock)
+        strcpy(WhichLock, "Int    ");
+    if (Mutex == HardwareLock)
+        strcpy(WhichLock, "Hard   ");
+    if (Mutex == ThreadTableLock)
+        strcpy(WhichLock, "T-Tbl  ");
 
-	// We maintain a record of all locks in the order in which they are first
-	//  accessed here.  The order doesn't matter, since we can identify that
-	//  lock every time we enter here.
-	LockID = -1;
-	for (i = 0; i < LockDB.NumberOfLocks; i++) {
-		if (LockDB.LockID[i] == Mutex)
-			LockID = i;
-	}
-	if (LockID == -1) {
-		LockDB.LockID[LockDB.NumberOfLocks] = Mutex;
-		LockDB.NumberOfLocks++;
-	}
+    // We maintain a record of all locks in the order in which they are first
+    //  accessed here.  The order doesn't matter, since we can identify that
+    //  lock every time we enter here.
+    LockID = -1;
+    for (i = 0; i < LockDB.NumberOfLocks; i++) {
+        if (LockDB.LockID[i] == Mutex)
+            LockID = i;
+    }
+    if (LockID == -1) {
+        LockDB.LockID[LockDB.NumberOfLocks] = Mutex;
+        LockDB.NumberOfLocks++;
+    }
 
-	strcpy(ProblemReport, "");
-	// We are ENTERING a TryLock OR Lock - record everything
-	// We have the following situations:
-	// Case 1: The Lock is not currently held
-	//         GOOD - increment the count and record the thread
-	// Case 2: The lock is currently held by the new requester
-	//         BAD - because we'll have to release it multiple times
-	// Case 3: The lock is currently held by someone else
-	//         OK - we assume the current holder will release it -
-	//         after all, this is what locks are for.
-	if (Return == LOCK_ENTER && (Action == LOCK_TRY || Action == LOCK_GET)) {
-		strcpy(Direction, " Enter");
-		LockDB.LockCount[LockID]++;
-		if (LockDB.LockCount[LockID] > MAX_NUMBER_OF_LOCKERS) {
-			LockDB.LockCount[LockID] = MAX_NUMBER_OF_LOCKERS;
-			printf("LOCK: BAD:  Exceeding number of lockers\n");
-		}
+    strcpy(ProblemReport, "");
+    // We are ENTERING a TryLock OR Lock - record everything
+    // We have the following situations:
+    // Case 1: The Lock is not currently held
+    //         GOOD - increment the count and record the thread
+    // Case 2: The lock is currently held by the new requester
+    //         BAD - because we'll have to release it multiple times
+    // Case 3: The lock is currently held by someone else
+    //         OK - we assume the current holder will release it -
+    //         after all, this is what locks are for.
+    if (Return == LOCK_ENTER && (Action == LOCK_TRY || Action == LOCK_GET)) {
+        strcpy(Direction, " Enter");
+        LockDB.LockCount[LockID]++;
+        if (LockDB.LockCount[LockID] > MAX_NUMBER_OF_LOCKERS) {
+            LockDB.LockCount[LockID] = MAX_NUMBER_OF_LOCKERS;
+            printf("LOCK: BAD:  Exceeding number of lockers\n");
+        }
 
-		if (LockDB.LockCount[LockID] == 1) {    // Case 1: First lock
-			LockDB.LockOwners[LockID][LockDB.LockCount[LockID] - 1] = MyTid;
-		} else {                                   // Already locked
-			if (MyTid == LockDB.LockOwners[LockID][0]) { // Case 2: Already owned by me - BAD
-				sprintf(ProblemReport,
-						"LOCK: BAD#1: Thread %X is RELOCKING %s:  Count = %d\n",
-						MyTid, WhichLock, LockDB.LockCount[LockID]);
-			}
-			if (MyTid != LockDB.LockOwners[LockID][0]) { // Case 3: owned by someone else - OK
-				sprintf(ProblemReport,
-						"LOCK: OK: Thread %X is LOCKING %s Held by %X:  Count = %d\n",
-						MyTid, WhichLock, LockDB.LockOwners[LockID][0],
-						LockDB.LockCount[LockID]);
-				LockDB.LockOwners[LockID][LockDB.LockCount[LockID] - 1] = MyTid;
-			}
-		}           // Lock count NOT 1
-	}               // End of entering LOCK
+        if (LockDB.LockCount[LockID] == 1) {    // Case 1: First lock
+            LockDB.LockOwners[LockID][LockDB.LockCount[LockID] - 1] = MyTid;
+        } else {                                   // Already locked
+            if (MyTid == LockDB.LockOwners[LockID][0]) { // Case 2: Already owned by me - BAD
+                sprintf(ProblemReport,
+                        "LOCK: BAD#1: Thread %X is RELOCKING %s:  Count = %d\n",
+                        MyTid, WhichLock, LockDB.LockCount[LockID]);
+            }
+            if (MyTid != LockDB.LockOwners[LockID][0]) { // Case 3: owned by someone else - OK
+                sprintf(ProblemReport,
+                        "LOCK: OK: Thread %X is LOCKING %s Held by %X:  Count = %d\n",
+                        MyTid, WhichLock, LockDB.LockOwners[LockID][0],
+                        LockDB.LockCount[LockID]);
+                LockDB.LockOwners[LockID][LockDB.LockCount[LockID] - 1] = MyTid;
+            }
+        }           // Lock count NOT 1
+    }               // End of entering LOCK
 
-	// We are ENTERING a ReleaseLock
-	// We have the following situations:
-	// Case 1: The Lock is  currently held by the releaser
-	//         GOOD - decrement the count - if there's someone waiting,
-	//         do some bookkeeping
-	// Case 1A: The lock count is still > 0 - it's still locked.  Report it.
-	// Case 2: The lock is currently held by someone else
-	//         BAD - We shouldn't be releasing a lock we don't hold
-	// Case 3: The lock is currently not held
-	//         BAD - this should NOT happen
+    // We are ENTERING a ReleaseLock
+    // We have the following situations:
+    // Case 1: The Lock is  currently held by the releaser
+    //         GOOD - decrement the count - if there's someone waiting,
+    //         do some bookkeeping
+    // Case 1A: The lock count is still > 0 - it's still locked.  Report it.
+    // Case 2: The lock is currently held by someone else
+    //         BAD - We shouldn't be releasing a lock we don't hold
+    // Case 3: The lock is currently not held
+    //         BAD - this should NOT happen
 
-	if (Return == LOCK_ENTER && Action == LOCK_RELEASE) {
-		strcpy(Direction, " Enter");
-		Quickie(LockID, 1);
+    if (Return == LOCK_ENTER && Action == LOCK_RELEASE) {
+        strcpy(Direction, " Enter");
+        Quickie(LockID, 1);
 
-		// Case 1: A thread is releasing a lock it holds
-		if (LockDB.LockCount[LockID] > 0
-				&& (MyTid == LockDB.LockOwners[LockID][0])) {
-			LockDB.LockCount[LockID]--;
+        // Case 1: A thread is releasing a lock it holds
+        if (LockDB.LockCount[LockID] > 0
+                && (MyTid == LockDB.LockOwners[LockID][0])) {
+            LockDB.LockCount[LockID]--;
 
-			for (j = 0; j < MAX_NUMBER_OF_LOCKERS - 1; j++) {
-				LockDB.LockOwners[LockID][j] = LockDB.LockOwners[LockID][j + 1];
-			}
-			for (j = 0; j < MAX_NUMBER_OF_LOCKERS - 1; j++) {
-				if (j >= LockDB.LockCount[LockID])
-					LockDB.LockOwners[LockID][j] = 0;
-			}
-			//Quickie(LockID, 2);
-			// If I've done multiple locks, there may be nobody else locking
-			if (LockDB.LockOwners[LockID][0] == 0)
-				LockDB.LockOwners[LockID][0] = MyTid;
+            for (j = 0; j < MAX_NUMBER_OF_LOCKERS - 1; j++) {
+                LockDB.LockOwners[LockID][j] = LockDB.LockOwners[LockID][j + 1];
+            }
+            for (j = 0; j < MAX_NUMBER_OF_LOCKERS - 1; j++) {
+                if (j >= LockDB.LockCount[LockID])
+                    LockDB.LockOwners[LockID][j] = 0;
+            }
+            //Quickie(LockID, 2);
+            // If I've done multiple locks, there may be nobody else locking
+            if (LockDB.LockOwners[LockID][0] == 0)
+                LockDB.LockOwners[LockID][0] = MyTid;
 
-			if (LockDB.LockCount[LockID] > 0) {    // Case 1A:
-				if (MyTid == LockDB.LockOwners[LockID][0]) {
-					//Quickie(LockID, 3);
-					sprintf(ProblemReport,
-							"LOCK: BAD#2: Thread %X is RELEASING %s  But count is = %d\n",
-							MyTid, WhichLock, LockDB.LockCount[LockID]);
-				}
-			}
-		}    // End of Case 1
+            if (LockDB.LockCount[LockID] > 0) {    // Case 1A:
+                if (MyTid == LockDB.LockOwners[LockID][0]) {
+                    //Quickie(LockID, 3);
+                    sprintf(ProblemReport,
+                            "LOCK: BAD#2: Thread %X is RELEASING %s  But count is = %d\n",
+                            MyTid, WhichLock, LockDB.LockCount[LockID]);
+                }
+            }
+        }    // End of Case 1
 
-		// Case 2: Make sure a thread only releases a lock it holds
-		else if (LockDB.LockCount[LockID] > 0
-				&& (MyTid != LockDB.LockOwners[LockID][0])) {
-			Quickie(LockID, 3);
-			sprintf(ProblemReport,
-					"LOCK: BAD#3: Thread %X is RELEASING %s Held by %X:  Count = %d\n",
-					MyTid, WhichLock, LockDB.LockOwners[LockID][0],
-					LockDB.LockCount[LockID]);
-			//LockDB.LockNextOwner[i] = MyTid;
-		}
+        // Case 2: Make sure a thread only releases a lock it holds
+        else if (LockDB.LockCount[LockID] > 0
+                && (MyTid != LockDB.LockOwners[LockID][0])) {
+            Quickie(LockID, 3);
+            sprintf(ProblemReport,
+                    "LOCK: BAD#3: Thread %X is RELEASING %s Held by %X:  Count = %d\n",
+                    MyTid, WhichLock, LockDB.LockOwners[LockID][0],
+                    LockDB.LockCount[LockID]);
+            //LockDB.LockNextOwner[i] = MyTid;
+        }
 
-		// Case 3:  Lock not held but still trying to release
-		else if (LockDB.LockCount[LockID] == 0) { // First release - this is good
-			sprintf(ProblemReport,
-					"LOCK: BAD#4: Thread %X is RELEASING %s:  Count = %d\n",
-					MyTid, WhichLock, LockDB.LockCount[LockID]);
-		} else {
-			sprintf(ProblemReport,
-					"LOCK: BAD#5: Thread %X is RELEASING %s:  With a condition we didn't account fo: Count = %d\n",
-					MyTid, WhichLock, LockDB.LockCount[LockID]);
-		}
-	}    // End of entering UNLOCK
+        // Case 3:  Lock not held but still trying to release
+        else if (LockDB.LockCount[LockID] == 0) { // First release - this is good
+            sprintf(ProblemReport,
+                    "LOCK: BAD#4: Thread %X is RELEASING %s:  Count = %d\n",
+                    MyTid, WhichLock, LockDB.LockCount[LockID]);
+        } else {
+            sprintf(ProblemReport,
+                    "LOCK: BAD#5: Thread %X is RELEASING %s:  With a condition we didn't account fo: Count = %d\n",
+                    MyTid, WhichLock, LockDB.LockCount[LockID]);
+        }
+    }    // End of entering UNLOCK
 
-	// Leaving the lock or unlock routine
-	if (Return == LOCK_EXIT) {
-		strcpy(Direction, " Exit ");
-		// With multiple requesters, there's no assurance that the release will be in FIFO order
-		// Check the exit to assure that the locker leaving the lock, and now the owner is
-		// in fact the first one listed in the database
-		if ((Action == LOCK_TRY || Action == LOCK_GET)
-				&& MyTid != LockDB.LockOwners[LockID][0] ){
-			i = 0;
-			for ( j = 1; j <= LockDB.LockCount[LockID]; j++){
-				if (MyTid == LockDB.LockOwners[LockID][j])
-					i = j;
-			}
-			if ( i == 0 ) {
-				sprintf(ProblemReport,
-						"LOCK: BAD#6: On exit from a lock, Thread %X couldn't find itself in the lockDB for %s\n",
-						MyTid, WhichLock);
-			}
-			else {   // Switch the order so this Task is the owner in our DB
-				j = LockDB.LockOwners[LockID][i];
-				LockDB.LockOwners[LockID][i] = LockDB.LockOwners[LockID][0];
-				LockDB.LockOwners[LockID][0] =j;
-				Quickie(LockID, 6);
-			}
-		}             // It's a lock action and we're not the lock owner
-	}                 // END of Return == EXIT
+    // Leaving the lock or unlock routine
+    if (Return == LOCK_EXIT) {
+        strcpy(Direction, " Exit ");
+        // With multiple requesters, there's no assurance that the release will be in FIFO order
+        // Check the exit to assure that the locker leaving the lock, and now the owner is
+        // in fact the first one listed in the database
+        if ((Action == LOCK_TRY || Action == LOCK_GET)
+                && MyTid != LockDB.LockOwners[LockID][0] ){
+            i = 0;
+            for ( j = 1; j <= LockDB.LockCount[LockID]; j++){
+                if (MyTid == LockDB.LockOwners[LockID][j])
+                    i = j;
+            }
+            if ( i == 0 ) {
+                sprintf(ProblemReport,
+                        "LOCK: BAD#6: On exit from a lock, Thread %X couldn't find itself in the lockDB for %s\n",
+                        MyTid, WhichLock);
+            }
+            else {   // Switch the order so this Task is the owner in our DB
+                j = LockDB.LockOwners[LockID][i];
+                LockDB.LockOwners[LockID][i] = LockDB.LockOwners[LockID][0];
+                LockDB.LockOwners[LockID][0] =j;
+                Quickie(LockID, 6);
+            }
+        }             // It's a lock action and we're not the lock owner
+    }                 // END of Return == EXIT
 
-	sprintf(Output, "LOCKS: %s: %s %s  %s Time = %d TID = %X  %s\n", LockAction,
-			Direction, TaskID, WhichLock, CurrentSimulationTime, MyTid,
-			LockCaller);
-	printf("%s", Output);
+    sprintf(Output, "LOCKS: %s: %s %s  %s Time = %d TID = %X  %s\n", LockAction,
+            Direction, TaskID, WhichLock, CurrentSimulationTime, MyTid,
+            LockCaller);
+    printf("%s", Output);
 
 // If something has gone wrong, print out a report.
-	if (strlen(ProblemReport) > 0)
-		printf("%s", ProblemReport);
-	ReleaseLock(PLDLock, "PLD");
+    if (strlen(ProblemReport) > 0)
+        printf("%s", ProblemReport);
+    ReleaseLock(PLDLock, "PLD");
 #endif
 }                                 // End of PrintLockDebug
 
@@ -2888,36 +2897,36 @@ void PrintLockDebug(int Action, char *LockCaller, int Mutex, int Return) {
 void CreateCondition(UINT32 *RequestedCondition) {
     int ConditionReturn;
 #ifdef NT
-	LocalEvent[NextConditionToAllocate] = CreateEvent(NULL, // no security attributes
-			FALSE,     // auto-reset event
-			FALSE,     // initial state is NOT signaled
-			NULL );     // object not named
-	ConditionReturn = 0;
-	if (LocalEvent[NextConditionToAllocate] == NULL ) {
-		printf("Internal error Creating an Event in CreateCondition\n");
-		HandleWindowsError();
-		GoToExit(0);
-	}
+    LocalEvent[NextConditionToAllocate] = CreateEvent(NULL, // no security attributes
+            FALSE,     // auto-reset event
+            FALSE,     // initial state is NOT signaled
+            NULL );     // object not named
+    ConditionReturn = 0;
+    if (LocalEvent[NextConditionToAllocate] == NULL ) {
+        printf("Internal error Creating an Event in CreateCondition\n");
+        HandleWindowsError();
+        GoToExit(0);
+    }
 #endif
 
 #if defined LINUX || defined MAC
-	*RequestedCondition = -1;
-	ConditionReturn
-	= pthread_cond_init( &(LocalCondition[NextConditionToAllocate]), NULL );
+    *RequestedCondition = -1;
+    ConditionReturn
+    = pthread_cond_init( &(LocalCondition[NextConditionToAllocate]), NULL );
 
-	if ( ConditionReturn == EAGAIN || ConditionReturn == ENOMEM )
-	printf( "PANIC in CreateCondition - No System Resources\n");
-	if ( ConditionReturn == EINVAL || ConditionReturn == EFAULT)
-	printf( "PANIC in CreateCondition - illegal input\n");
-	if ( ConditionReturn == EBUSY ) //  Already locked by another thread
-	printf( "PANIC in CreateCondition - Already initialized\n");
+    if ( ConditionReturn == EAGAIN || ConditionReturn == ENOMEM )
+    printf( "PANIC in CreateCondition - No System Resources\n");
+    if ( ConditionReturn == EINVAL || ConditionReturn == EFAULT)
+    printf( "PANIC in CreateCondition - illegal input\n");
+    if ( ConditionReturn == EBUSY ) //  Already locked by another thread
+    printf( "PANIC in CreateCondition - Already initialized\n");
 #endif
     if (ConditionReturn == 0) {
         *RequestedCondition = NextConditionToAllocate;
         NextConditionToAllocate++;
     }
 #ifdef  DEBUG_CONDITION
-	printf("CreateCondition # %d\n", *RequestedCondition);
+    printf("CreateCondition # %d\n", *RequestedCondition);
 #endif
 }                               // End of CreateCondition
 
@@ -2932,20 +2941,20 @@ int WaitForCondition(UINT32 Condition, UINT32 Mutex, INT32 WaitTime,
     int ReturnValue = 0;
     int ConditionReturn;
 #ifdef DEBUG_CONDITION
-	printf(
-			"WaitForCondition - Enter - time = %d My-Cond = %d  Thread = %X  %s\n",
-			CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
+    printf(
+            "WaitForCondition - Enter - time = %d My-Cond = %d  Thread = %X  %s\n",
+            CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
 #endif
 #ifdef NT
-	ConditionReturn = (int) WaitForSingleObject(LocalEvent[Condition],
-			INFINITE);
+    ConditionReturn = (int) WaitForSingleObject(LocalEvent[Condition],
+            INFINITE);
 //ConditionReturn = (int) WaitForSingleObject(LocalEvent[Condition],WaitTime);
-	if (ConditionReturn == WAIT_FAILED ) {
-		printf("Internal error waiting for an event in WaitForCondition\n");
-		HandleWindowsError();
-		GoToExit(0);
-	}
-	ReturnValue = 0;
+    if (ConditionReturn == WAIT_FAILED ) {
+        printf("Internal error waiting for an event in WaitForCondition\n");
+        HandleWindowsError();
+        GoToExit(0);
+    }
+    ReturnValue = 0;
 
 #endif
 #if defined LINUX || defined MAC
@@ -2953,21 +2962,21 @@ int WaitForCondition(UINT32 Condition, UINT32 Mutex, INT32 WaitTime,
 //            printf("WaitForCondition:  %d %d %d\n", Mutex, 
 //                    (int)LocalMutex[Mutex], GetMyTid() );
 //        }
-	pthread_mutex_lock( &(LocalMutex[Mutex]) );
-	ConditionReturn
-	= pthread_cond_wait( &(LocalCondition[Condition]),
-			&(LocalMutex[Mutex]) );
-	if ( ConditionReturn == EINVAL )
-	printf( "In WaitForCondition, An illegal argument value was found\n");
-	if ( ConditionReturn == EPERM )
-	printf( "In WaitForCondition, The mutex was not locked by the caller\n");
-	if ( ConditionReturn == 0 )
-	ReturnValue = TRUE;// Success
+    pthread_mutex_lock( &(LocalMutex[Mutex]) );
+    ConditionReturn
+    = pthread_cond_wait( &(LocalCondition[Condition]),
+            &(LocalMutex[Mutex]) );
+    if ( ConditionReturn == EINVAL )
+    printf( "In WaitForCondition, An illegal argument value was found\n");
+    if ( ConditionReturn == EPERM )
+    printf( "In WaitForCondition, The mutex was not locked by the caller\n");
+    if ( ConditionReturn == 0 )
+    ReturnValue = TRUE;// Success
 #endif
 #ifdef DEBUG_CONDITION
-	printf(
-			"WaitForCondition - Exit - time = %d My-Cond = %d  Thread = %X  %s\n",
-			CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
+    printf(
+            "WaitForCondition - Exit - time = %d My-Cond = %d  Thread = %X  %s\n",
+            CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
 #endif
     return (ReturnValue);
 }                               // End of WaitForCondition
@@ -2979,16 +2988,16 @@ int WaitForCondition(UINT32 Condition, UINT32 Mutex, INT32 WaitTime,
 int SignalCondition(UINT32 Condition, char* CallingRoutine) {
     int ReturnValue = 0;
 #ifdef NT
-	static int NumberOfSignals = 0;
+    static int NumberOfSignals = 0;
 #endif
 #if defined LINUX || defined MAC
-	int ConditionReturn;
+    int ConditionReturn;
 #endif
 
 #ifdef DEBUG_CONDITION
-	printf(
-			"SignalCondition - Enter - time = %d Target-Cond = %d  Thread = %X  %s\n",
-			CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
+    printf(
+            "SignalCondition - Enter - time = %d Target-Cond = %d  Thread = %X  %s\n",
+            CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
 #endif
     if (InterruptTid == GetMyTid())  // We don't want to signal ourselves
     {
@@ -2996,30 +3005,30 @@ int SignalCondition(UINT32 Condition, char* CallingRoutine) {
         return (ReturnValue);
     }
 #ifdef NT
-	if (!SetEvent(LocalEvent[Condition])) {
-		printf("Internal error signalling  an event in SignalCondition\n");
-		HandleWindowsError();
-		GoToExit(0);
-	}
-	ReturnValue = TRUE;
-	if (NumberOfSignals % 3 == 0)
-		DoSleep(1);
-	NumberOfSignals++;
+    if (!SetEvent(LocalEvent[Condition])) {
+        printf("Internal error signalling  an event in SignalCondition\n");
+        HandleWindowsError();
+        GoToExit(0);
+    }
+    ReturnValue = TRUE;
+    if (NumberOfSignals % 3 == 0)
+        DoSleep(1);
+    NumberOfSignals++;
 #endif
 #if defined LINUX || defined MAC
 
-	ConditionReturn
-	= pthread_cond_signal( &(LocalCondition[Condition]) );
-	if ( ConditionReturn == EINVAL || ConditionReturn == EFAULT )
-	printf( "In SignalCondition, An illegal value or status was found\n");
-	if ( ConditionReturn == 0 )
-	ReturnValue = TRUE;          // Success
-	ConditionReturn = sched_yield();
+    ConditionReturn
+    = pthread_cond_signal( &(LocalCondition[Condition]) );
+    if ( ConditionReturn == EINVAL || ConditionReturn == EFAULT )
+    printf( "In SignalCondition, An illegal value or status was found\n");
+    if ( ConditionReturn == 0 )
+    ReturnValue = TRUE;          // Success
+    ConditionReturn = sched_yield();
 #endif
 #ifdef DEBUG_CONDITION
-	printf(
-			"SignalCondition - Exit - time = %d Target-Cond = %d  Thread = %X  %s\n",
-			CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
+    printf(
+            "SignalCondition - Exit - time = %d Target-Cond = %d  Thread = %X  %s\n",
+            CurrentSimulationTime, Condition, GetMyTid(), CallingRoutine);
 #endif
     return (ReturnValue);
 }                               // End of SignalCondition
@@ -3032,7 +3041,7 @@ int SignalCondition(UINT32 Condition, char* CallingRoutine) {
 void DoSleep(INT32 millisecs) {
 
 #ifdef NT
-	Sleep(millisecs);
+    Sleep(millisecs);
 #endif
 #ifndef NT
     usleep((unsigned long) (millisecs * 1000));
@@ -3044,16 +3053,16 @@ void DoSleep(INT32 millisecs) {
 
 #ifdef  NT
 void HandleWindowsError() {
-	LPVOID lpMsgBuf;
-	char OutputString[256];
+    LPVOID lpMsgBuf;
+    char OutputString[256];
 
-	FormatMessage(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
-					| FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(),
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &lpMsgBuf, 0,
-			NULL );
-	sprintf(OutputString, "%s\n", (char *) lpMsgBuf);
-	printf(OutputString);
+    FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
+                    | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, GetLastError(),
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &lpMsgBuf, 0,
+            NULL );
+    sprintf(OutputString, "%s\n", (char *) lpMsgBuf);
+    printf(OutputString);
 }                                     // End HandleWindowsError
 #endif
 
@@ -3079,7 +3088,7 @@ void Z502Init() {
     INT16 i;
 
     if (Z502Initialized == FALSE) {
-// Show that we've been in this code.
+        // Show that we've been in this code.
         Z502Initialized = TRUE;
 
         printf("This is Simulation Version %s and Hardware Version %s.\n\n",
@@ -3120,16 +3129,16 @@ void Z502Init() {
 
         Z502_MODE = KERNEL_MODE;
 
-//Z502MakeContext( &starting_context_ptr,
-//                                  ( void *)os_init, KERNEL_MODE );
+        //Z502MakeContext( &starting_context_ptr,
+        //                                  ( void *)os_init, KERNEL_MODE );
         Z502_CURRENT_CONTEXT = NULL;
-//z502_machine_next_context_ptr       = starting_context_ptr;
+        //z502_machine_next_context_ptr       = starting_context_ptr;
 
         CreateAThread((int *) HardwareInterrupt, &EventLock);
         DoSleep(100);
         ChangeThreadPriority(LESS_FAVORABLE_PRIORITY);
 
-// Set  up the user thread structure
+        // Set  up the user thread structure
         for (i = 0; i < MAX_NUMBER_OF_USER_THREADS; i++) {
             ThreadTable[i].OurLocalID = -1;
         }
