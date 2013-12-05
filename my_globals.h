@@ -72,6 +72,7 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid);
 void dispatcher(void);
 void sleep_process(INT32 sleep_time, PCB* sleeping_process);
 func_ptr get_function_handle(char *name);
+void scheduler_printer(char* action, int target);
 BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message);
 MESSAGE* remove_message(PCB* pcb, int index);
 int find_message_by_source(PCB* pcb, int source_pid);
@@ -84,5 +85,7 @@ void unlock_read(void);
 void lock_suspend(void);
 void unlock_suspend(void);
 UINT16 find_empty_frame();
+void disk_read(long disk_id, long sector_id, char* read_buffer);
+void disk_write(long disk_id, long sector_id, char* write_buffer);
 
 #endif

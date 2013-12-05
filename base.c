@@ -56,7 +56,6 @@ BOOL add_next_to_timer = FALSE;
 BOOL interrupt_lock = FALSE;
 
 int memory_printer = 1;
-int scheduler_printer = 1;
 
 char *call_names[] = { "mem_read ", "mem_write",
                        "read_mod ", "get_time ", "sleep    ",
@@ -123,14 +122,6 @@ void    interrupt_handler( void ) {
         case(DISK_INTERRUPT+9):
         case(DISK_INTERRUPT+10):
         case(DISK_INTERRUPT+11):
-
-            // grab the lock
-            //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
-            //dispatcher();
-
-            // grab the lock
-            //READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             break;
         default:
@@ -319,6 +310,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             else {
                 process_handle = os_make_process(name, priority, SystemCallData->Argument[4], addr, USER_MODE);
 
+                //scheduler_printer("NEW", process_handle->pid);
+
                 if(process_handle != NULL) {
                     *(SystemCallData->Argument[4]) = ERR_SUCCESS;
                     *(SystemCallData->Argument[3]) = process_handle->pid;
@@ -374,6 +367,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 }
                 // We can finally suspend the process
                 else {
+                    //scheduler_printer("SUSPEND", process_handle->pid);
                     process_handle->state = SUSPEND;
                     current_PCB->suspend_reason = WAITING_UNDEFINED;
                     //not needed, the ready queue is built each time the dispatcher is called
@@ -573,18 +567,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_DISK_READ:
-            // These registers apply to READ and WRITE
-            //Z502_REG3  - address where data was written/read.
-            //Z502_REG4  - process id of this process.
-            //Z502_REG6  - number of iterations/loops through the code.
-            //Z502_REG7  - which page will the write/read be on. start at 0
-            //Z502_REG9  - returned error code.
+            disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         case SYSNUM_DISK_WRITE:
-            //        DISK_WRITE(disk_id, sector, (char* )(data_written->char_data));
-            //disk_id = (long) SystemCallData->Argument[0];
-            //sector = (long) SystemCallData->Argument[1];
-            // something for char_data has to happen also
+            //disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         default:
             printf("Unrecognized system call!!\n");
@@ -708,6 +694,8 @@ void os_destroy_process(PCB* pcb) {
         printf("error, only root can destroy processes\n");
         return;
     }
+
+    //scheduler_printer("TERMINATED", pcb->pid);
     remove_from_list(timer_queue, pcb->pid);
 
     Z502DestroyContext(&pcb->context);
@@ -916,6 +904,23 @@ func_ptr get_function_handle(char *name) {
     return response;
 }
 
+void scheduler_printer(char* action, int target) {
+    int time;
+    PCB* p;
+
+    MEM_READ(Z502ClockStatus, &time);
+    SP_setup(SP_TIME_MODE, time);
+
+    SP_setup_action(SP_ACTION_MODE, action);
+    SP_setup(SP_TARGET_MODE, target);
+
+    if(current_PCB != NULL) {
+        SP_setup( SP_RUNNING_MODE, current_PCB->pid );
+    }
+
+    SP_print_header();
+    SP_print_line();
+}
 
 /**
 * This function takes a process and a message list and adds the incoming
@@ -1023,4 +1028,74 @@ UINT16 find_empty_frame() {
 
     //no empty frames
     return -1;
+}
+
+void disk_read(long disk_id, long sector_id, char* read_buffer) {
+    INT32 disk_status;
+    MEM_WRITE(Z502DiskSetID, &disk_id);
+    MEM_READ(Z502DiskStatus, &disk_status);
+
+    if (disk_status == DEVICE_FREE) {
+        MEM_WRITE(Z502DiskSetSector, &sector_id);
+        MEM_WRITE(Z502DiskSetBuffer, (INT32*)read_buffer);
+
+        disk_status = 0;
+        MEM_WRITE(Z502DiskSetAction, &disk_status);
+        disk_status = 0;
+
+        MEM_WRITE(Z502DiskStart, &disk_status);
+        MEM_WRITE(Z502DiskSetID, &disk_id);
+        MEM_READ(Z502DiskStatus, &disk_status);
+
+        while (disk_status != DEVICE_FREE) {
+            Z502Idle();
+            MEM_READ(Z502DiskStatus, &disk_status);
+        }
+
+        current_PCB = NULL;
+        dispatcher();
+        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+    }
+    else if(disk_status == DEVICE_IN_USE) {
+        current_PCB = NULL;
+        dispatcher();
+        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+    }
+    else {
+        printf("Catch All!\n");
+    }
+}
+
+void disk_write(long disk_id, long sector_id, char* write_buffer) {
+    INT32 disk_status;
+    MEM_WRITE(Z502DiskSetID, &disk_id);
+    MEM_READ(Z502DiskStatus, &disk_status);
+
+    if (disk_status == DEVICE_FREE) {
+        MEM_WRITE(Z502DiskSetSector, &sector_id);
+        MEM_WRITE(Z502DiskSetBuffer, (INT32 * )write_buffer);
+        disk_status = 1;
+        MEM_WRITE(Z502DiskSetAction, &disk_status);
+        disk_status = 0;
+        MEM_WRITE(Z502DiskStart, &disk_status);
+        MEM_WRITE(Z502DiskSetID, &disk_id);
+        MEM_READ(Z502DiskStatus, &disk_status);
+
+        while (disk_status != DEVICE_FREE) {
+            Z502Idle();
+            MEM_READ(Z502DiskStatus, &disk_status);
+        }
+
+        current_PCB = NULL;
+        dispatcher();
+        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+    }
+    else if(disk_status == DEVICE_IN_USE) {
+        current_PCB = NULL;
+        dispatcher();
+        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+    }
+    else {
+        printf("Catch All!\n");
+    }
 }
