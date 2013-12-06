@@ -203,6 +203,11 @@ void    fault_handler( void )
             break;
     }
 
+    if(device_id == 4 && status == 0) {
+        printf("Unrecognized device handler\n");
+        Z502Halt();
+    }
+
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
 }                                       /* End of fault_handler */
@@ -453,6 +458,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 INT32 message_length = (INT32) SystemCallData->Argument[2];
 
+                READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+                READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
                 MESSAGE *msg = (MESSAGE*) calloc(1, sizeof(MESSAGE));
                 msg->handled = FALSE;
                 msg->source_pid = current_PCB->pid;
@@ -508,6 +516,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     }
                 }
             }
+
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+
             break;
 
         case SYSNUM_RECEIVE_MESSAGE:
@@ -525,6 +537,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 MESSAGE *msg = NULL;
                 INT32 able_to_receive_length = (INT32) SystemCallData->Argument[2];
+
+                READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+                READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
                 if ((tmp_pid != -1) && (search_for_pid(process_list, tmp_pid) == NULL)) {
                     printf("Error, process %i does not exist\n", tmp_pid);
@@ -563,6 +578,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     free(msg);
                 }
             }
+
+            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             break;
 
@@ -1037,7 +1055,7 @@ void disk_read(long disk_id, long sector_id, char* read_buffer) {
 
     if (disk_status == DEVICE_FREE) {
         MEM_WRITE(Z502DiskSetSector, &sector_id);
-        MEM_WRITE(Z502DiskSetBuffer, (INT32*)read_buffer);
+        MEM_WRITE(Z502DiskSetBuffer, (INT32*) read_buffer);
 
         disk_status = 0;
         MEM_WRITE(Z502DiskSetAction, &disk_status);
@@ -1073,10 +1091,12 @@ void disk_write(long disk_id, long sector_id, char* write_buffer) {
 
     if (disk_status == DEVICE_FREE) {
         MEM_WRITE(Z502DiskSetSector, &sector_id);
-        MEM_WRITE(Z502DiskSetBuffer, (INT32 * )write_buffer);
+        MEM_WRITE(Z502DiskSetBuffer, (INT32*) write_buffer);
+
         disk_status = 1;
         MEM_WRITE(Z502DiskSetAction, &disk_status);
         disk_status = 0;
+
         MEM_WRITE(Z502DiskStart, &disk_status);
         MEM_WRITE(Z502DiskSetID, &disk_id);
         MEM_READ(Z502DiskStatus, &disk_status);
