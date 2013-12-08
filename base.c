@@ -84,9 +84,6 @@ void    interrupt_handler( void ) {
     // Now read the status of this device
     MEM_READ(Z502InterruptStatus, &status );
 
-    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-    READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
     switch(device_id) {
         case(TIMER_INTERRUPT):
             MEM_READ(Z502ClockStatus, &Time);
@@ -133,7 +130,6 @@ void    interrupt_handler( void ) {
                 MEM_WRITE(Z502DiskSetID, &(disk_queue[device_id].disk_id));
                 MEM_WRITE(Z502DiskSetSector, &(disk_queue[device_id].sector_id));
                 MEM_WRITE(Z502DiskSetBuffer, (INT32*) disk_queue[device_id].buffer);
-                break;
             }
 
             break;
@@ -141,9 +137,6 @@ void    interrupt_handler( void ) {
             printf("Unrecognized interrupt %i\n", device_id);
             break;
     }
-
-    READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-    READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
     // Clear out this device - we're done with it
     MEM_WRITE(Z502InterruptClear, &Index );
@@ -371,9 +364,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
 
-            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
             // Make sure we got a valid process
             if(process_handle != NULL) {
                 // Is the process running?
@@ -402,17 +392,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 *SystemCallData->Argument[1] = ERR_BAD_PARAM;
             }
 
-            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
             break;
 
         case SYSNUM_RESUME_PROCESS:
             tmp_pid = (int*)SystemCallData->Argument[0];
             process_handle = search_for_pid(process_list, tmp_pid);
-
-            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             // Make sure we got a valid process
             if(process_handle != NULL) {
@@ -431,17 +415,11 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 *SystemCallData->Argument[1] = ERR_BAD_PARAM;
             }
 
-            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
             break;
 
         case SYSNUM_CHANGE_PRIORITY:
             tmp_pid = (int*)SystemCallData->Argument[0];
             INT32 new_priority = (int*)SystemCallData->Argument[1];
-
-            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             if (tmp_pid == -1)
                 process_handle = current_PCB;
@@ -459,9 +437,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 *(SystemCallData->Argument[2]) = ERR_SUCCESS;
             }
 
-            READ_MODIFY( MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY( MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
             break;
 
         case SYSNUM_SEND_MESSAGE:
@@ -473,9 +448,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 INT32 message_length = (INT32) SystemCallData->Argument[2];
-
-                READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-                READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
                 MESSAGE *msg = (MESSAGE*) calloc(1, sizeof(MESSAGE));
                 msg->handled = FALSE;
@@ -533,9 +505,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 }
             }
 
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
             break;
 
         case SYSNUM_RECEIVE_MESSAGE:
@@ -553,9 +522,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 MESSAGE *msg = NULL;
                 INT32 able_to_receive_length = (INT32) SystemCallData->Argument[2];
-
-                READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-                READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
                 if ((tmp_pid != -1) && (search_for_pid(process_list, tmp_pid) == NULL)) {
                     printf("Error, process %i does not exist\n", tmp_pid);
@@ -594,9 +560,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                     free(msg);
                 }
             }
-
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             break;
 
@@ -809,15 +772,9 @@ void dispatcher() {
         ready_queue = build_ready_queue(process_list);
 
         if(ready_queue->data != NULL) {
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-
             PCB* process_to_run = ready_queue->data;
             process_to_run->state = RUNNING;
             free_ready_queue(ready_queue);
-
-            READ_MODIFY(MEMORY_INTERLOCK_BASE, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-            READ_MODIFY(MEMORY_INTERLOCK_BASE+1, DO_UNLOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
 
             switch_context(process_to_run, SWITCH_CONTEXT_SAVE_MODE);
         }
@@ -1070,7 +1027,19 @@ UINT16 find_empty_frame() {
         }
     }
 
-    //no empty frames
+    //no empty frames find an unused one and release it
+    //for now, arbitrarily take frame 0
+
+    // write to disk
+    //frame_list[0].in_use = FALSE;
+    // free memory
+    // clear frame list
+
+
+
+    // READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
+
+
     return -1;
 }
 
