@@ -584,37 +584,28 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 break;
             }
 
-            printf("step 1.  Reading from disk: %i\n", SystemCallData->Argument[0]);
             if (disk_queue == NULL) {
                 disk_queue = (PCB**) calloc(sizeof(PCB*), MAX_NUMBER_OF_DISKS);
             }
 
-            printf("step 2\n");
             if(current_PCB->disk_data == NULL)
                 current_PCB->disk_data = calloc(sizeof(DISK*), 1);
 
-            printf("step 3\n");
             current_PCB->disk_data->disk_id = SystemCallData->Argument[0];
             current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
 
-            printf("step 4 %i %i\n", SystemCallData->Argument[0], (INT32)SystemCallData->Argument[0]);
             disk_queue[(INT32)SystemCallData->Argument[0]] = current_PCB;
-            printf("step 5\n");
 
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-            printf("step 5a\n");
             MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
-            printf("step 5b\n");
+
             //MEM_WRITE(Z502DiskSetBuffer, &(current_PCB->disk_data->buffer));
             MEM_WRITE(Z502DiskSetBuffer, &(SystemCallData->Argument[2]));
-            printf("step 5c\n");
+
             temp = 0;
             MEM_WRITE(Z502DiskSetAction, &(temp));  //set to read from disk
-            printf("step 5d\n");
             temp = 0;
             MEM_WRITE(Z502DiskStart, &(temp));
-
-            printf("step 5e\n");
 
             MEM_WRITE(Z502DiskSetID, &(SystemCallData->Argument[0]));
             MEM_READ(Z502DiskStatus, &disk_status);
@@ -633,11 +624,8 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 //printf("Read from disk: %s\n", current_PCB->disk_data->buffer);
                 printf("Read from disk: %s\n", SystemCallData->Argument[2]);
 
-                printf("step 6\n");
                 //memcpy(SystemCallData->Argument[2], current_PCB->disk_data->buffer, PGSIZE);
                 //memset(current_PCB->disk_data->buffer, '\0', PGSIZE);
-                printf("step 7\n");
-
             }
             //disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
 
@@ -669,7 +657,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             MEM_WRITE(Z502DiskSetSector, &(SystemCallData->Argument[1]));
             MEM_WRITE(Z502DiskSetBuffer, &(SystemCallData[2]) );
-            printf("Writing to disk: %s\n", SystemCallData[2]);
+            printf("Writing data to disk: %s\n", SystemCallData[2]);
             temp = 1;
             MEM_WRITE(Z502DiskSetAction, &(temp));  //set to write from disk
             temp = 0;
