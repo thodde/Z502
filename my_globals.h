@@ -48,6 +48,12 @@ typedef struct {
 } FRAME;
 
 typedef struct {
+    long disk_id;
+    long sector_id;
+    char* buffer;
+} DISK;
+
+typedef struct {
     INT32       pid;
     INT32       delay;
     char        name[MAX_NAME];
@@ -60,13 +66,8 @@ typedef struct {
     long        time_spent_processing;
     MESSAGE*    inbound_messages[MAX_MSG_COUNT];
     UINT16      pagetable[VIRTUAL_MEM_PGS];
+    DISK*       disk_data;
 } PCB;
-
-typedef struct {
-    long disk_id;
-    long sector_id;
-    char* buffer;
-} DISK;
 
 typedef void* func_ptr;
 
@@ -91,6 +92,7 @@ void unlock_read(void);
 void lock_suspend(void);
 void unlock_suspend(void);
 UINT16 find_empty_frame();
+int get_disk_status(long disk_id);
 void disk_read(long disk_id, long sector_id, char* read_buffer);
 void disk_write(long disk_id, long sector_id, char* write_buffer);
 
