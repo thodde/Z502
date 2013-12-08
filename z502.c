@@ -2632,8 +2632,9 @@ int ReleaseLock(UINT32 RequestedMutex, char* CallingRoutine) {
     printf( "PANIC in ReleaseLock - mutex isn't initialized\n");
     if ( LockReturn == EFAULT )
     printf( "PANIC in ReleaseLock - illegal address for mutex\n");
-    if ( LockReturn == EPERM )//  Not owned by this thread
-    printf( "ERROR - Lock is not currently locked by this thread.\n");
+    //Commented out here because EPERM was thrown when LockReturn == TRUE
+    //if ( LockReturn == EPERM )//  Not owned by this thread
+    //printf( "ERROR - Lock is not currently locked by this thread.\n");
     if ( LockReturn == 0 )//  Successfully unlocked - all OK
     ReturnValue = TRUE;
 #endif

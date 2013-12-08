@@ -164,6 +164,7 @@ void    fault_handler( void )
             Z502Halt();
             break;
         case INVALID_MEMORY:
+            printf("received an invalid memory request in context: %li\n", current_PCB->pid);
 
             // Make sure the page requested is valid
             if(status >= VIRTUAL_MEM_PGS) {
@@ -178,6 +179,7 @@ void    fault_handler( void )
             }
 
             if(Z502_PAGE_TBL_ADDR[status] == NULL) {
+                //printf("requested page table does not exist.  Getting one\n");
                 // The user is requesting a page that has not yet been created
                 frame = find_empty_frame();
                 if(frame == -1) {
@@ -186,6 +188,15 @@ void    fault_handler( void )
                 }
                 else {
                     Z502_PAGE_TBL_ADDR[status] = PTBL_VALID_BIT | frame;
+                    printf("Found memory location: %i\n", frame);
+                    BOOL retval = TRUE;
+                    //READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
+                    READ_MODIFY(MEMORY_INTERLOCK_BASE + status, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
+//                    READ_MODIFY(Z502_PAGE_TBL_ADDR[status], 1, TRUE, &lock_result);
+                    if (lock_result == FALSE)
+                        printf("Error, could not obtain lock!!\n");
+                    else
+                        printf("lock obtained\n");
                 }
             }
             else if(!(Z502_PAGE_TBL_ADDR[status] & PTBL_VALID_BIT)) {
