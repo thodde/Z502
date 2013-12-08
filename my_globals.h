@@ -31,10 +31,12 @@
 #define         WAITING_FOR_DISK    2
 
 // LOCK STATES
-#define         DO_LOCK                        1
-#define         DO_UNLOCK                      0
+#define         DO_LOCK                     1
+#define         DO_UNLOCK                   0
 #define         SUSPEND_UNTIL_LOCKED        TRUE
 #define         DO_NOT_SUSPEND              FALSE
+#define         DISK_READ                   1
+#define         DISK_WRITE                  2
 
 typedef struct {
     INT16 msg_buffer[MAX_MSG];
@@ -52,6 +54,7 @@ typedef struct {
     long disk_id;
     long sector_id;
     char buffer[PGSIZE];
+    int disk_operation;
 } DISK;
 
 typedef struct {

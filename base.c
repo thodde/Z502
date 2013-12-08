@@ -132,13 +132,6 @@ void    interrupt_handler( void ) {
 
                 if (disk_queue[disk_id] != NULL) {
                     //I believe this is automatically done
-
-                    printf("Data read: %s\n", disk_queue[disk_id]->disk_data->buffer);
-                    MEM_WRITE(Z502DiskSetID, &(disk_queue[disk_id]->disk_data->disk_id));
-                    MEM_WRITE(Z502DiskSetSector, &(disk_queue[disk_id]->disk_data->sector_id));
-                    MEM_READ(Z502DiskSetBuffer, disk_queue[disk_id]->disk_data->buffer);
-                    printf("Data read: %s\n", disk_queue[disk_id]->disk_data->buffer);
-
                     disk_queue[disk_id]->state = READY;
                     disk_queue[disk_id] = NULL;
                 }
@@ -154,6 +147,7 @@ void    interrupt_handler( void ) {
         }
 
         MEM_WRITE(Z502InterruptClear, &Index );
+        Index += 1;
         MEM_READ(Z502InterruptDevice, &device_id );
     }
 
@@ -593,11 +587,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             current_PCB->disk_data->disk_id = SystemCallData->Argument[0];
             current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
+            current_PCB->disk_data->disk_operation = DISK_READ;
 
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_READ(Z502DiskStatus, &disk_status);
 
-            while (disk_status != DEVICE_FREE) { //sleep till free
+            while (!(disk_status == DEVICE_FREE)) { //sleep till free
                 sleep_process(5, current_PCB);
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
                 MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
@@ -607,14 +602,16 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
 
-            MEM_WRITE(Z502DiskSetBuffer, &(current_PCB->disk_data->buffer));
+            MEM_WRITE(Z502DiskSetBuffer, (INT32 *)(current_PCB->disk_data->buffer));
+//            MEM_WRITE(Z502DiskSetBuffer, &(current_PCB->disk_data->buffer));
 
             temp = 0;
             MEM_WRITE(Z502DiskSetAction, &(temp));  //set to read from disk
             temp = 0;
+            disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
             MEM_WRITE(Z502DiskStart, &(temp));
 
-            MEM_WRITE(Z502DiskSetID, &(SystemCallData->Argument[0]));
+            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_READ(Z502DiskStatus, &disk_status);
 
             if(disk_status == DEVICE_FREE) {
@@ -624,7 +621,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 printf("Error!  Disk write was not set up correctly\n");
             }
             else {
-                disk_queue[(INT32)SystemCallData->Argument[0]] = current_PCB;
                 current_PCB->state = SUSPEND;
                 current_PCB->suspend_reason = WAITING_FOR_DISK;
 
@@ -658,13 +654,14 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             current_PCB->disk_data->disk_id = SystemCallData->Argument[0];
             current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
+            current_PCB->disk_data->disk_operation = DISK_WRITE;
 
             memcpy(current_PCB->disk_data->buffer, SystemCallData->Argument[2], PGSIZE);
 
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_READ(Z502DiskStatus, &disk_status);
 
-            while (disk_status != DEVICE_FREE) { //sleep till free
+            while (!(disk_status == DEVICE_FREE)) { //sleep till free
                 sleep_process(5, current_PCB);
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
                 MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
@@ -676,15 +673,16 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             printf("Writing data to disk: %s\n", current_PCB->disk_data->buffer);
 
-            MEM_WRITE(Z502DiskSetSector, &(SystemCallData->Argument[1]));
+            MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
 //            MEM_WRITE(Z502DiskSetBuffer, &(SystemCallData[2]) );
             MEM_WRITE(Z502DiskSetBuffer, (INT32 *)(current_PCB->disk_data->buffer) );
             temp = 1;
             MEM_WRITE(Z502DiskSetAction, &(temp));  //set to write from disk
             temp = 0;
+            disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
             MEM_WRITE(Z502DiskStart, &(temp));
 
-            MEM_WRITE(Z502DiskSetID, &(SystemCallData->Argument[0]));
+            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_READ(Z502DiskStatus, &disk_status);
 
             if(disk_status == DEVICE_FREE) {
@@ -694,7 +692,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 printf("Error!  Disk write was not set up correctly\n");
             }
             else {
-                disk_queue[(INT32)SystemCallData->Argument[0]] = current_PCB;
                 current_PCB->state = SUSPEND;
                 current_PCB->suspend_reason = WAITING_FOR_DISK;
 
