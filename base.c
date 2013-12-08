@@ -199,7 +199,7 @@ void    fault_handler( void )
                     printf("Found memory location: %i\n", frame);
                     BOOL retval = TRUE;
                     //READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, SUSPEND_UNTIL_LOCKED, &lock_result);
-                    READ_MODIFY(MEMORY_INTERLOCK_BASE + status, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
+                    READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
 //                    READ_MODIFY(Z502_PAGE_TBL_ADDR[status], 1, TRUE, &lock_result);
                     if (lock_result == FALSE)
                         printf("Error, could not obtain lock!!\n");
