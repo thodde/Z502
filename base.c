@@ -129,8 +129,10 @@ void    interrupt_handler( void ) {
             }
 
             while(get_disk_status(device_id) != -1) {
-                // going to need a disk queue so that we can write out the
-                // front of the queue here
+                // read the values from the disk queue
+                MEM_WRITE(Z502DiskSetID, &(disk_queue[device_id].disk_id));
+                MEM_WRITE(Z502DiskSetSector, &(disk_queue[device_id].sector_id));
+                MEM_WRITE(Z502DiskSetBuffer, (INT32*) disk_queue[device_id].buffer);
                 break;
             }
 
@@ -607,9 +609,17 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_DISK_READ:
+            if (disk_queue == NULL) {
+                disk_queue = (DISK*) calloc(sizeof(DISK), MAX_NUMBER_OF_DISKS-1);
+            }
+
             disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         case SYSNUM_DISK_WRITE:
+            if (disk_queue == NULL) {
+                disk_queue = (DISK*) calloc(sizeof(DISK), MAX_NUMBER_OF_DISKS-1);
+            }
+
             disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         case SYSNUM_DEFINE_SHARED_AREA:
@@ -1097,7 +1107,6 @@ void disk_read(long disk_id, long sector_id, char* read_buffer) {
         MEM_READ(Z502DiskStatus, &disk_status);
 
         while (disk_status != DEVICE_FREE) {
-            Z502Idle();
             MEM_READ(Z502DiskStatus, &disk_status);
         }
 
@@ -1107,7 +1116,7 @@ void disk_read(long disk_id, long sector_id, char* read_buffer) {
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else {
-        printf("Catch All! Should never get here!\n");
+        printf("Catch All from disk_read! Should never get here!\n");
     }
 }
 
@@ -1130,16 +1139,20 @@ void disk_write(long disk_id, long sector_id, char* write_buffer) {
         MEM_READ(Z502DiskStatus, &disk_status);
 
         while (disk_status != DEVICE_FREE) {
-            Z502Idle();
             MEM_READ(Z502DiskStatus, &disk_status);
         }
 
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else if(disk_status == DEVICE_IN_USE) {
+        // add the current disk write info to the disk queue
+        disk_queue[disk_id].disk_id = disk_id;
+        disk_queue[disk_id].sector_id = sector_id;
+        disk_queue[disk_id].buffer = write_buffer;
+
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else {
-        printf("Catch All! Should never get here!\n");
+        printf("Catch All from disk_write! Should never get here!\n");
     }
 }

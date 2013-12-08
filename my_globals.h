@@ -65,7 +65,7 @@ typedef struct {
 typedef struct {
     long disk_id;
     long sector_id;
-    PCB* pcb;
+    char* buffer;
 } DISK;
 
 typedef void* func_ptr;
