@@ -128,8 +128,11 @@ void    interrupt_handler( void ) {
                 break;
             }
 
-            MEM_WRITE(Z502DiskSetID, &device_id);
-            MEM_READ(Z502DiskStatus, &disk_status);
+            while(get_disk_status(device_id) != -1) {
+                // going to need a disk queue so that we can write out the
+                // front of the queue here
+                break;
+            }
 
             break;
         default:
@@ -1067,6 +1070,13 @@ UINT16 find_empty_frame() {
 
     //no empty frames
     return -1;
+}
+
+int get_disk_status(long disk_id) {
+    INT32 disk_status;
+    MEM_WRITE(Z502DiskSetID, &disk_id);
+    MEM_READ(Z502DiskStatus, &disk_status);
+    return disk_status;
 }
 
 void disk_read(long disk_id, long sector_id, char* read_buffer) {
