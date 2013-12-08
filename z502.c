@@ -2637,6 +2637,7 @@ int ReleaseLock(UINT32 RequestedMutex, char* CallingRoutine) {
     //printf( "ERROR - Lock is not currently locked by this thread.\n");
     if ( LockReturn == 0 )//  Successfully unlocked - all OK
     ReturnValue = TRUE;
+    //printf("LockReturn: %i EPERM: %i EINVAL: %i EFAULT: %i ReturnValue: %i\n", LockReturn, EPERM, EINVAL, EFAULT, ReturnValue);
 #endif
     PrintLockDebug(LOCK_RELEASE, CallingRoutine, RequestedMutex, LOCK_EXIT);
     return (ReturnValue);
