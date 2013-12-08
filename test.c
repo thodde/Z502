@@ -203,7 +203,7 @@ void test1b(void) {
 
     GET_TIME_OF_DAY(&Z502_REG4);
     printf("Test1b, PID %ld, Ends at Time %ld\n", Z502_REG2, Z502_REG4);
-    TERMINATE_PROCESS(-2, &Z502_REG9);
+    TERMINATE_PROCESS(-2, &Z502_REG9)
 
 }                                                  // End of test1b
 
@@ -305,6 +305,7 @@ void test1d(void) {
     }
 
     TERMINATE_PROCESS(-2, &Z502_REG9);
+
 }                                                 // End test1d
 
 /**************************************************************************
@@ -836,7 +837,7 @@ void test1j(void) {
     }    // End of for loop
 
     //      Keep sending legal messages until the architectural (OS)
-    //      limit for buffer space is exhausted.
+    //      limit for buffer space is exhausted.     
 
     Z502_REG9 = ERR_SUCCESS;
     while (Z502_REG9 == ERR_SUCCESS) {
@@ -1255,7 +1256,6 @@ void test2a(void) {
     printf("Release %s:Test 2a: Pid %ld\n", CURRENT_REL, Z502_REG4);
     Z502_REG3 = 412;
     Z502_REG1 = Z502_REG3 + Z502_REG4;
-
     MEM_WRITE(Z502_REG3, &Z502_REG1);
 
     MEM_READ(Z502_REG3, &Z502_REG2);
@@ -1329,7 +1329,7 @@ void test2b(void) {
             printf("AN ERROR HAS OCCURRED.\n");
         Z502_REG5++;
     }
-}                            // End of test2b
+}                            // End of test2b    
 
 /**************************************************************************
 
@@ -1529,6 +1529,7 @@ void test2e(void) {
             printf("AN ERROR HAS OCCURRED.\n");
 
     }    // End of for loop
+    TERMINATE_PROCESS(-2, &Z502_REG5);      // Added 12/1/2013
 }                                  // End of test2e    
 
 /**************************************************************************
@@ -1551,7 +1552,7 @@ void test2e(void) {
 #define                 LOGICAL_PAGES_TO_TOUCH       2 * PHYS_MEM_PGS
 
 typedef struct {
-    INT16 page_touched[LOGICAL_PAGES_TO_TOUCH];
+    INT16 page_touched[LOOP_COUNT];   // Bugfix Rel 4.03  12/1/13
 } MEMORY_TOUCHED_RECORD;
 
 void test2f(void) {
@@ -1564,7 +1565,7 @@ void test2f(void) {
     printf("\n\nRelease %s:Test 2f: Pid %ld\n", CURRENT_REL, Z502_REG4);
 
     for (Iterations = 0; Iterations < NUMBER_OF_ITERATIONS; Iterations++) {
-        for (Index = 0; Index < LOGICAL_PAGES_TO_TOUCH; Index++)
+        for (Index = 0; Index < LOOP_COUNT; Index++)   // Bugfix Rel 4.03  12/1/13
             mtr->page_touched[Index] = 0;
         for (Loops = 0; Loops < LOOP_COUNT; Loops++) {
             // Get a random page number
