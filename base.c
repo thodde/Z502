@@ -46,7 +46,8 @@ PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;           // Holds all processes that exist
 
-DISK*              disk_queue;             // Holds all processes trying to use the disk
+PCB**               disk_queue;             // Holds all processes trying to use the disk
+//PCB*               disk_queue[MAX_NUMBER_OF_DISKS];             // Holds all processes trying to use the disk
 FRAME*             frame_list;
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
@@ -79,67 +80,84 @@ void    interrupt_handler( void ) {
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
-    // Set this device as target of our query
-    MEM_WRITE(Z502InterruptDevice, &device_id );
-    // Now read the status of this device
-    MEM_READ(Z502InterruptStatus, &status );
 
-    switch(device_id) {
-        case(TIMER_INTERRUPT):
-            MEM_READ(Z502ClockStatus, &Time);
+    while(device_id != -1) {
+        // Set this device as target of our query
+        MEM_WRITE(Z502InterruptDevice, &device_id );
+        // Now read the status of this device
+        MEM_READ(Z502InterruptStatus, &status );
 
-            if (timer_queue == NULL) {
+        switch(device_id) {
+            case(TIMER_INTERRUPT):
+                MEM_READ(Z502ClockStatus, &Time);
+
+                if (timer_queue == NULL) {
+                    break;
+                }
+
+                if (timer_queue->data == NULL) {
+                    break;
+                }
+                PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
+                waking_process->state = READY;
+
+                //add the next one to the queue
+                if (get_length(timer_queue) == 0) {
+                    interrupt_lock = FALSE;
+                }
+
+                if (get_length(timer_queue) > 0) {
+                    add_next_to_timer = TRUE;
+                }
+
+                break;
+            case(DISK_INTERRUPT):
+            case(DISK_INTERRUPT+1):
+            case(DISK_INTERRUPT+2):
+            case(DISK_INTERRUPT+3):
+            case(DISK_INTERRUPT+4):
+            case(DISK_INTERRUPT+5):
+            case(DISK_INTERRUPT+6):
+            case(DISK_INTERRUPT+7):
+            case(DISK_INTERRUPT+8):
+            case(DISK_INTERRUPT+9):
+            case(DISK_INTERRUPT+10):
+            case(DISK_INTERRUPT+11):
+            {
+                int disk_id = device_id - DISK_INTERRUPT + 1;
+                printf("Disk interrupt: %i!\n", disk_id);
+                if (device_id < DISK_INTERRUPT || device_id >= (DISK_INTERRUPT + MAX_NUMBER_OF_DISKS)) {
+                    // Make sure the interrupt is valid
+                    break;
+                }
+
+                if (disk_queue[disk_id] != NULL) {
+                    //I believe this is automatically done
+
+//                    MEM_WRITE(Z502DiskSetID, &(disk_queue[device_id]->disk_data->disk_id));
+//                    MEM_WRITE(Z502DiskSetSector, &(disk_queue[device_id]->disk_data->sector_id));
+//                    MEM_WRITE(Z502DiskSetBuffer, (INT32*) disk_queue[device_id]->disk_data->buffer);
+
+                    //printf("READ DATA: %s\n", disk_queue[disk_id]->disk_data->buffer);
+                    disk_queue[disk_id]->state = READY;
+                    disk_queue[disk_id] = NULL;
+                }
+                else {
+                    printf("Error, no PCB is available for this request\n");
+                }
+
                 break;
             }
-
-            if (timer_queue->data == NULL) {
+            default:
+                printf("Unrecognized interrupt %i\n", device_id);
                 break;
-            }
-            PCB* waking_process = remove_from_list(timer_queue, timer_queue->data->pid);
-            waking_process->state = READY;
+        }
 
-            //add the next one to the queue
-            if (get_length(timer_queue) == 0) {
-                interrupt_lock = FALSE;
-            }
-
-            if (get_length(timer_queue) > 0) {
-                add_next_to_timer = TRUE;
-            }
-
-            break;
-        case(DISK_INTERRUPT):
-        case(DISK_INTERRUPT+1):
-        case(DISK_INTERRUPT+2):
-        case(DISK_INTERRUPT+3):
-        case(DISK_INTERRUPT+4):
-        case(DISK_INTERRUPT+5):
-        case(DISK_INTERRUPT+6):
-        case(DISK_INTERRUPT+7):
-        case(DISK_INTERRUPT+8):
-        case(DISK_INTERRUPT+9):
-        case(DISK_INTERRUPT+10):
-        case(DISK_INTERRUPT+11):
-            if (device_id < DISK_INTERRUPT || device_id >= DISK_INTERRUPT + MAX_NUMBER_OF_DISKS) {
-                // Make sure the interrupt is valid
-                break;
-            }
-
-            while(get_disk_status(device_id) != -1) {
-                // read the values from the disk queue
-                MEM_WRITE(Z502DiskSetID, &(disk_queue[device_id].disk_id));
-                MEM_WRITE(Z502DiskSetSector, &(disk_queue[device_id].sector_id));
-                MEM_WRITE(Z502DiskSetBuffer, (INT32*) disk_queue[device_id].buffer);
-            }
-
-            break;
-        default:
-            printf("Unrecognized interrupt %i\n", device_id);
-            break;
+        MEM_WRITE(Z502InterruptClear, &Index );
+        MEM_READ(Z502InterruptDevice, &device_id );
     }
 
     // Clear out this device - we're done with it
-    MEM_WRITE(Z502InterruptClear, &Index );
 }                                       /* End of interrupt_handler */
 
 /************************************************************************
@@ -246,6 +264,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     long                disk_id;
     long                sector;
     INT32               lock_result;
+    INT32               temp;
+    INT32               disk_status;
+
 
     call_type = (short)SystemCallData->SystemCallNumber;
 
@@ -509,16 +530,6 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
         case SYSNUM_RECEIVE_MESSAGE:
             {
-                //  arg0          INT32 source_pid;
-                //  arg1          char message_buffer[N];
-                //  arg2          INT32 message_receive_length;
-                //  arg3          INT32 message_send_length;
-                //  arg4          INT32 message_sender_pid;
-                //  arg5          INT32 error;
-
-                //TODO notes: partial completion of test1j.  The system now hangs.  I suspect no processes are being properly woken up
-                // when they receive they receive a message.  Need to test this!!
-
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 MESSAGE *msg = NULL;
                 INT32 able_to_receive_length = (INT32) SystemCallData->Argument[2];
@@ -564,18 +575,123 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             break;
 
         case SYSNUM_DISK_READ:
-            if (disk_queue == NULL) {
-                disk_queue = (DISK*) calloc(sizeof(DISK), MAX_NUMBER_OF_DISKS-1);
+            if (SystemCallData->Argument[0] < 1 || SystemCallData->Argument[0] > MAX_NUMBER_OF_DISKS) {
+                printf("Error, call to an invalid disk number\n");
+                break;
+            }
+            if (SystemCallData->Argument[1] < 0 || SystemCallData->Argument[1] > NUM_LOGICAL_SECTORS) {
+                printf("Error, call to an invalid sector requested\n");
+                break;
             }
 
-            disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+            printf("step 1.  Reading from disk: %i\n", SystemCallData->Argument[0]);
+            if (disk_queue == NULL) {
+                disk_queue = (PCB**) calloc(sizeof(PCB*), MAX_NUMBER_OF_DISKS);
+            }
+
+            printf("step 2\n");
+            if(current_PCB->disk_data == NULL)
+                current_PCB->disk_data = calloc(sizeof(DISK*), 1);
+
+            printf("step 3\n");
+            current_PCB->disk_data->disk_id = SystemCallData->Argument[0];
+            current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
+
+            printf("step 4 %i %i\n", SystemCallData->Argument[0], (INT32)SystemCallData->Argument[0]);
+            disk_queue[(INT32)SystemCallData->Argument[0]] = current_PCB;
+            printf("step 5\n");
+
+            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
+            printf("step 5a\n");
+            MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
+            printf("step 5b\n");
+            //MEM_WRITE(Z502DiskSetBuffer, &(current_PCB->disk_data->buffer));
+            MEM_WRITE(Z502DiskSetBuffer, &(SystemCallData->Argument[2]));
+            printf("step 5c\n");
+            temp = 0;
+            MEM_WRITE(Z502DiskSetAction, &(temp));  //set to read from disk
+            printf("step 5d\n");
+            temp = 0;
+            MEM_WRITE(Z502DiskStart, &(temp));
+
+            printf("step 5e\n");
+
+            MEM_WRITE(Z502DiskSetID, &(SystemCallData->Argument[0]));
+            MEM_READ(Z502DiskStatus, &disk_status);
+
+            if(disk_status == DEVICE_FREE) {
+                printf("Error!  Disk is free and should be in use\n");
+            }
+            else if(disk_status == ERR_BAD_DEVICE_ID) {
+                printf("Error!  Disk write was not set up correctly\n");
+            }
+            else {
+                current_PCB->state = SUSPEND;
+                current_PCB->suspend_reason = WAITING_FOR_DISK;
+
+                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+                //printf("Read from disk: %s\n", current_PCB->disk_data->buffer);
+                printf("Read from disk: %s\n", SystemCallData->Argument[2]);
+
+                printf("step 6\n");
+                //memcpy(SystemCallData->Argument[2], current_PCB->disk_data->buffer, PGSIZE);
+                //memset(current_PCB->disk_data->buffer, '\0', PGSIZE);
+                printf("step 7\n");
+
+            }
+            //disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+
             break;
+
         case SYSNUM_DISK_WRITE:
-            if (disk_queue == NULL) {
-                disk_queue = (DISK*) calloc(sizeof(DISK), MAX_NUMBER_OF_DISKS-1);
+            if (SystemCallData->Argument[0] < 1 || SystemCallData->Argument[0] > MAX_NUMBER_OF_DISKS) {
+                printf("Error, call to an invalid disk number\n");
+                break;
+            }
+            if (SystemCallData->Argument[1] < 0 || SystemCallData->Argument[1] > NUM_LOGICAL_SECTORS) {
+                printf("Error, call to an invalid sector requested\n");
+                break;
             }
 
-            disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+            if (disk_queue == NULL) {
+                disk_queue = (PCB**) calloc(sizeof(PCB*), MAX_NUMBER_OF_DISKS);
+            }
+
+            if(current_PCB->disk_data == NULL)
+                current_PCB->disk_data = calloc(sizeof(DISK*), 1);
+
+            current_PCB->disk_data->disk_id = SystemCallData->Argument[0];
+            current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
+            disk_queue[(INT32)SystemCallData->Argument[0]] = current_PCB;
+
+            MEM_WRITE(Z502DiskSetID, &(SystemCallData->Argument[0]));
+            //TODO check that it is free before I initiate this write
+
+            MEM_WRITE(Z502DiskSetSector, &(SystemCallData->Argument[1]));
+            MEM_WRITE(Z502DiskSetBuffer, &(SystemCallData[2]) );
+            printf("Writing to disk: %s\n", SystemCallData[2]);
+            temp = 1;
+            MEM_WRITE(Z502DiskSetAction, &(temp));  //set to write from disk
+            temp = 0;
+            MEM_WRITE(Z502DiskStart, &(temp));
+
+            MEM_WRITE(Z502DiskSetID, &(SystemCallData->Argument[0]));
+            MEM_READ(Z502DiskStatus, &disk_status);
+
+            if(disk_status == DEVICE_FREE) {
+                printf("Error!  Disk is free and should be in use\n");
+            }
+            else if(disk_status == ERR_BAD_DEVICE_ID) {
+                printf("Error!  Disk write was not set up correctly\n");
+            }
+            else {
+                current_PCB->state = SUSPEND;
+                current_PCB->suspend_reason = WAITING_FOR_DISK;
+
+                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+            }
+
+            //disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         case SYSNUM_DEFINE_SHARED_AREA:
             break;
@@ -1071,10 +1187,15 @@ void disk_read(long disk_id, long sector_id, char* read_buffer) {
             MEM_READ(Z502DiskStatus, &disk_status);
         }
 
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+        current_PCB->state = READY;
+        //Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else if(disk_status == DEVICE_IN_USE) {
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+//        disk_queue[disk_id].disk_id = disk_id;
+//        disk_queue[disk_id].sector_id = sector_id;
+//        disk_queue[disk_id].buffer = read_buffer;
+        current_PCB->state = READY;
+        //Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else {
         printf("Catch All from disk_read! Should never get here!\n");
@@ -1102,16 +1223,12 @@ void disk_write(long disk_id, long sector_id, char* write_buffer) {
         while (disk_status != DEVICE_FREE) {
             MEM_READ(Z502DiskStatus, &disk_status);
         }
-
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else if(disk_status == DEVICE_IN_USE) {
         // add the current disk write info to the disk queue
-        disk_queue[disk_id].disk_id = disk_id;
-        disk_queue[disk_id].sector_id = sector_id;
-        disk_queue[disk_id].buffer = write_buffer;
-
-        Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+//        disk_queue[disk_id].disk_id = disk_id;
+//        disk_queue[disk_id].sector_id = sector_id;
+//        disk_queue[disk_id].buffer = write_buffer;
     }
     else {
         printf("Catch All from disk_write! Should never get here!\n");

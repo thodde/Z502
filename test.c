@@ -1381,6 +1381,7 @@ void test2c(void) {
         data_written->int_data[1] = sanity;
         data_written->int_data[2] = sector;
         data_written->int_data[3] = (int) Z502_REG4;
+        printf("%i %i\n", disk_id, sector);
         DISK_WRITE(disk_id, sector, (char* )(data_written->char_data));
 
         // Now read back the same data.  Note that we assume the
