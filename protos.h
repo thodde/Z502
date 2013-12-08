@@ -64,6 +64,7 @@ void   test2e( void );
 void   test2f( void );
 void   test2g( void );
 void   test2h( void );
+void   test2cAlt( void );
 
 
 //                      ENTRIES in z502.c

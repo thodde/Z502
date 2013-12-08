@@ -1381,7 +1381,6 @@ void test2c(void) {
         data_written->int_data[1] = sanity;
         data_written->int_data[2] = sector;
         data_written->int_data[3] = (int) Z502_REG4;
-        printf("%i %i\n", disk_id, sector);
         DISK_WRITE(disk_id, sector, (char* )(data_written->char_data));
 
         // Now read back the same data.  Note that we assume the
@@ -1432,6 +1431,51 @@ void test2c(void) {
     TERMINATE_PROCESS(-1, &Z502_REG9);
 
 }                                       // End of test2c    
+
+
+void test2cAlt(void) {
+    long       disk_id;
+    INT32      sanity = 1234;
+    long       sector;
+    int        Iterations;
+
+    char data_read[PGSIZE];// = "HelloWorld";
+    char data_written[PGSIZE]; // = "HelloWorld'"
+    strcpy(data_written, "HelloWorld");
+
+    GET_PROCESS_ID("", &Z502_REG4, &Z502_REG9);
+
+    sector = Z502_REG4;
+    printf("\n\nRelease %s:Test 2c: Pid %ld\n", CURRENT_REL, Z502_REG4);
+
+    for (Iterations = 0; Iterations < TEST2C_LOOPS; Iterations++) {
+        // Pick some location on the disk to write to
+        disk_id = (Z502_REG4 / 2) % MAX_NUMBER_OF_DISKS + 1;
+        sector = (sector * 177) % NUM_LOGICAL_SECTORS;
+        DISK_WRITE(disk_id, sector, data_written);
+
+        // Now read back the same data.  Note that we assume the
+        // disk_id and sector have not been modified by the previous
+        // call.
+        DISK_READ(disk_id, sector, data_read);
+
+        if (strcmp(data_read, data_written) != 0) {
+            printf("AN ERROR HAS OCCURRED.\n");
+        } else if (Z502_REG6 % DISPLAY_GRANULARITY2c == 0) {
+            printf("SUCCESS READING  PID= %ld  disk_id =%ld, sector = %ld\n",
+                    Z502_REG4, disk_id, sector);
+        }
+    }   // End of for loop
+
+    // Now read back the data we've written and paged
+
+    GET_TIME_OF_DAY(&Z502_REG8);
+    printf("Test2c, PID %ld, Ends at Time %ld\n", Z502_REG4, Z502_REG8);
+    TERMINATE_PROCESS(-1, &Z502_REG9);
+
+}                                       // End of test2c
+
+
 
 /**************************************************************************
 
