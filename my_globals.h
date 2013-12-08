@@ -62,6 +62,12 @@ typedef struct {
     UINT16      pagetable[VIRTUAL_MEM_PGS];
 } PCB;
 
+typedef struct {
+    long disk_id;
+    long sector_id;
+    PCB* pcb;
+} DISK;
+
 typedef void* func_ptr;
 
 //******** Function Prototypes *********//
