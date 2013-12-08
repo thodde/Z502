@@ -46,8 +46,8 @@ PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;           // Holds all processes that exist
 
-//FRAME              frame_list[PHYS_MEM_PGS];
-FRAME*              frame_list;
+DISK*              disk_queue;             // Holds all processes trying to use the disk
+FRAME*             frame_list;
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              last_context_switch = 0;  // the number of ticks since the last context switch
@@ -75,6 +75,7 @@ void    interrupt_handler( void ) {
     INT32              Index = 0;
     INT32              Time;
     INT32              lock_result;
+    INT32              disk_status;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -122,6 +123,13 @@ void    interrupt_handler( void ) {
         case(DISK_INTERRUPT+9):
         case(DISK_INTERRUPT+10):
         case(DISK_INTERRUPT+11):
+            if (device_id < DISK_INTERRUPT || device_id >= DISK_INTERRUPT + MAX_NUMBER_OF_DISKS) {
+                // Make sure the interrupt is valid
+                break;
+            }
+
+            MEM_WRITE(Z502DiskSetID, &device_id);
+            MEM_READ(Z502DiskStatus, &disk_status);
 
             break;
         default:
@@ -461,10 +469,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
         case SYSNUM_SEND_MESSAGE:
             {
-//            INT32 target_pid;
-//            char message_buffer[N];
-//            INT32 message_send_length;
-//            INT32 error;
+                //            INT32 target_pid;
+                //            char message_buffer[N];
+                //            INT32 message_send_length;
+                //            INT32 error;
 
                 tmp_pid = (int*)SystemCallData->Argument[0];
                 INT32 message_length = (INT32) SystemCallData->Argument[2];
@@ -535,12 +543,12 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
         case SYSNUM_RECEIVE_MESSAGE:
             {
-//  arg0          INT32 source_pid;
-//  arg1          char message_buffer[N];
-//  arg2          INT32 message_receive_length;
-//  arg3          INT32 message_send_length;
-//  arg4          INT32 message_sender_pid;
-//  arg5          INT32 error;
+                //  arg0          INT32 source_pid;
+                //  arg1          char message_buffer[N];
+                //  arg2          INT32 message_receive_length;
+                //  arg3          INT32 message_send_length;
+                //  arg4          INT32 message_sender_pid;
+                //  arg5          INT32 error;
 
                 //TODO notes: partial completion of test1j.  The system now hangs.  I suspect no processes are being properly woken up
                 // when they receive they receive a message.  Need to test this!!
@@ -599,7 +607,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         case SYSNUM_DISK_WRITE:
-            //disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+            disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+            break;
+        case SYSNUM_DEFINE_SHARED_AREA:
             break;
         default:
             printf("Unrecognized system call!!\n");
@@ -1081,17 +1091,13 @@ void disk_read(long disk_id, long sector_id, char* read_buffer) {
             MEM_READ(Z502DiskStatus, &disk_status);
         }
 
-        current_PCB = NULL;
-        dispatcher();
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else if(disk_status == DEVICE_IN_USE) {
-        current_PCB = NULL;
-        dispatcher();
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else {
-        printf("Catch All!\n");
+        printf("Catch All! Should never get here!\n");
     }
 }
 
@@ -1101,6 +1107,7 @@ void disk_write(long disk_id, long sector_id, char* write_buffer) {
     MEM_READ(Z502DiskStatus, &disk_status);
 
     if (disk_status == DEVICE_FREE) {
+        MEM_WRITE(Z502DiskSetID, &disk_id);
         MEM_WRITE(Z502DiskSetSector, &sector_id);
         MEM_WRITE(Z502DiskSetBuffer, (INT32*) write_buffer);
 
@@ -1117,16 +1124,12 @@ void disk_write(long disk_id, long sector_id, char* write_buffer) {
             MEM_READ(Z502DiskStatus, &disk_status);
         }
 
-        current_PCB = NULL;
-        dispatcher();
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else if(disk_status == DEVICE_IN_USE) {
-        current_PCB = NULL;
-        dispatcher();
         Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
     else {
-        printf("Catch All!\n");
+        printf("Catch All! Should never get here!\n");
     }
 }
