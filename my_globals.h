@@ -83,7 +83,7 @@ void pcb_cascade_delete_by_parent(INT32 parent_pid);
 void dispatcher(void);
 void sleep_process(INT32 sleep_time, PCB* sleeping_process);
 func_ptr get_function_handle(char *name);
-void scheduler_printer(char* action, int target);
+void scheduler_printer(char* action);
 void memory_printer();
 BOOL enqueue_message(PCB* target_process, MESSAGE* inbound_message);
 MESSAGE* remove_message(PCB* pcb, int index);

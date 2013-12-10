@@ -56,6 +56,10 @@ INT32              last_context_switch = 0;  // the number of ticks since the la
 BOOL add_next_to_timer = FALSE;
 BOOL interrupt_lock = FALSE;
 
+// if these flags are set to 1, print out state information
+int print_schedule = 0;
+int print_memory = 0;
+
 char *call_names[] = { "mem_read ", "mem_write",
                        "read_mod ", "get_time ", "sleep    ",
                        "get_pid  ", "create   ", "term_proc",
@@ -354,11 +358,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             else {
                 process_handle = os_make_process(name, priority, SystemCallData->Argument[4], addr, USER_MODE);
 
-                //scheduler_printer("NEW", process_handle->pid);
-
                 if(process_handle != NULL) {
                     *(SystemCallData->Argument[4]) = ERR_SUCCESS;
                     *(SystemCallData->Argument[3]) = process_handle->pid;
+                    scheduler_printer("NEW");
                 }
                 else
                     *(SystemCallData->Argument[4]) = ERR_BAD_PARAM;
@@ -408,9 +411,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 }
                 // We can finally suspend the process
                 else {
-                    //scheduler_printer("SUSPEND", process_handle->pid);
                     process_handle->state = SUSPEND;
                     current_PCB->suspend_reason = WAITING_UNDEFINED;
+                    scheduler_printer("SUSPEND");
                     //not needed, the ready queue is built each time the dispatcher is called
                     //remove_from_list(ready_queue, process_handle->pid);
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
@@ -437,6 +440,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 }
                 else {
                     process_handle->state = READY;
+                    scheduler_printer("READY");
                     *(SystemCallData->Argument[1]) = ERR_SUCCESS;
                 }
             }
@@ -820,7 +824,7 @@ void os_destroy_process(PCB* pcb) {
         return;
     }
 
-    //scheduler_printer("TERMINATED", pcb->pid);
+    //scheduler_printer("TERMINATED");
     remove_from_list(timer_queue, pcb->pid);
 
     Z502DestroyContext(&pcb->context);
@@ -1027,23 +1031,28 @@ func_ptr get_function_handle(char *name) {
 
 /**
 * Print out the state of the processes whenever it is called.
+* This is basically a glorified wrapper for all these state_printer calls
 */
-void scheduler_printer(char* action, int target) {
+void scheduler_printer(char* action) {
     int time;
     PCB* p;
 
-    MEM_READ(Z502ClockStatus, &time);
-    SP_setup(SP_TIME_MODE, time);
+    // this makes sure we don't print out state information
+    // all the time if it is not needed
+    if(print_schedule == 1) {
+        MEM_READ(Z502ClockStatus, &time);
+        SP_setup(SP_TIME_MODE, time);
 
-    SP_setup_action(SP_ACTION_MODE, action);
-    SP_setup(SP_TARGET_MODE, target);
+        SP_setup_action(SP_ACTION_MODE, action);
 
-    if(current_PCB != NULL) {
-        SP_setup( SP_RUNNING_MODE, current_PCB->pid );
+        if(current_PCB != NULL) {
+            SP_setup(SP_TARGET_MODE, current_PCB->pid);
+            SP_setup( SP_RUNNING_MODE, current_PCB->pid );
+        }
+
+        SP_print_header();
+        SP_print_line();
     }
-
-    SP_print_header();
-    SP_print_line();
 }
 
 /**
@@ -1054,16 +1063,19 @@ void memory_printer() {
     int i = 0;
     int state = 0;
 
-    for(i = 0; i <= PHYS_MEM_PGS; i++) {
-        //state = ((Z502_PAGE_TBL_ADDR[i] & PTBL_VALID_BIT)) +
-        //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_MODIFIED_BIT)) +
-        //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_REFERENCED_BIT));
+    // makes sure we aren't printing out memory stuff if it is not needed
+    if(print_memory == 1) {
+        for(i = 0; i <= PHYS_MEM_PGS; i++) {
+            //state = ((Z502_PAGE_TBL_ADDR[i] & PTBL_VALID_BIT)) +
+            //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_MODIFIED_BIT)) +
+            //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_REFERENCED_BIT));
 
-        MP_setup(Z502_PAGE_TBL_ADDR[i], current_PCB->pid, current_PCB->pagetable, state);
+            MP_setup(Z502_PAGE_TBL_ADDR[i], current_PCB->pid, current_PCB->pagetable, state);
+        }
+
+        MP_print_line();
+        printf("\n");
     }
-
-    MP_print_line();
-    printf("\n");
 }
 
 /**
