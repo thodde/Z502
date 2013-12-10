@@ -1434,14 +1434,15 @@ void test2c(void) {
 
 
 void test2cAlt(void) {
-    long       disk_id;
+    INT16       disk_id;
     INT32      sanity = 1234;
-    long       sector;
+    INT16       sector;
     int        Iterations;
 
     char data_read[PGSIZE];// = "HelloWorld";
     char data_written[PGSIZE]; // = "HelloWorld'"
-    strcpy(data_written, "HelloWorld");
+    //strcpy(data_written, "HelloWorld");
+    strncpy(data_written, "123456789abcdef", 15);
 
     GET_PROCESS_ID("", &Z502_REG4, &Z502_REG9);
 

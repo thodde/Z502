@@ -51,9 +51,9 @@ typedef struct {
 } FRAME;
 
 typedef struct {
-    long disk_id;
-    long sector_id;
-    char buffer[PGSIZE];
+    INT16 disk_id;
+    INT32 sector_id;
+    INT32 buffer[PGSIZE];
     int disk_operation;
 } DISK;
 

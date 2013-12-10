@@ -130,14 +130,23 @@ void    interrupt_handler( void ) {
                     break;
                 }
 
-                if (disk_queue[disk_id] != NULL) {
-                    //I believe this is automatically done
-                    disk_queue[disk_id]->state = READY;
-                    disk_queue[disk_id] = NULL;
+                INT32 disk_status;
+                MEM_WRITE(Z502DiskSetID, &(disk_id));
+                MEM_READ(Z502DiskStatus, &disk_status);
+
+                if (disk_status == DEVICE_FREE) {
+                    if (disk_queue[disk_id] != NULL) {
+                        //I believe this is automatically done
+                        disk_queue[disk_id]->state = READY;
+                        disk_queue[disk_id] = NULL;
+                    }
+                    else {
+                        printf("Error, no PCB is available for this request\n");
+                    }
                 }
-                else {
-                    printf("Error, no PCB is available for this request\n");
-                }
+                else
+                    printf("Write is not complete yet\n");
+
             }
             break;
 
@@ -255,11 +264,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
     PCB*                process_handle;
     Node*               process_node;
     INT32               tmp_pid;
-    long                disk_id;
-    long                sector;
     INT32               lock_result;
-    INT32               temp;
     INT32               disk_status;
+    INT32               disk_action;
+    INT32               disk_start;
 
 
     call_type = (short)SystemCallData->SystemCallNumber;
@@ -593,7 +601,7 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             MEM_READ(Z502DiskStatus, &disk_status);
 
             while (!(disk_status == DEVICE_FREE)) { //sleep till free
-                sleep_process(5, current_PCB);
+                sleep_process(20, current_PCB);
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
                 MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
                 MEM_READ(Z502DiskStatus, &disk_status);
@@ -602,14 +610,13 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
 
-            MEM_WRITE(Z502DiskSetBuffer, (INT32 *)(current_PCB->disk_data->buffer));
-//            MEM_WRITE(Z502DiskSetBuffer, &(current_PCB->disk_data->buffer));
+            MEM_WRITE(Z502DiskSetBuffer, (INT16 *)(current_PCB->disk_data->buffer));
 
-            temp = 0;
-            MEM_WRITE(Z502DiskSetAction, &(temp));  //set to read from disk
-            temp = 0;
+            disk_action = 0;
+            MEM_WRITE(Z502DiskSetAction, &(disk_action));  //set to read from disk
+            disk_start = 0;
             disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
-            MEM_WRITE(Z502DiskStart, &(temp));
+            MEM_WRITE(Z502DiskStart, &(disk_start));
 
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_READ(Z502DiskStatus, &disk_status);
@@ -625,11 +632,9 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
                 current_PCB->suspend_reason = WAITING_FOR_DISK;
 
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
-                printf("Read from disk: %s\n", current_PCB->disk_data->buffer);
 
                 memcpy(SystemCallData->Argument[2], current_PCB->disk_data->buffer, PGSIZE);
                 memset(current_PCB->disk_data->buffer, '\0', PGSIZE);
-                printf("Read from disk: %s\n", SystemCallData->Argument[2]);
             }
             //disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
 
@@ -651,54 +656,20 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
 
             if(current_PCB->disk_data == NULL)
                 current_PCB->disk_data = calloc(sizeof(DISK*), 1);
+            memset(current_PCB->disk_data->buffer, '\0', PGSIZE);
 
             current_PCB->disk_data->disk_id = SystemCallData->Argument[0];
-            current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
-            current_PCB->disk_data->disk_operation = DISK_WRITE;
-
-            memcpy(current_PCB->disk_data->buffer, SystemCallData->Argument[2], PGSIZE);
-
             MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
             MEM_READ(Z502DiskStatus, &disk_status);
 
             while (!(disk_status == DEVICE_FREE)) { //sleep till free
-                sleep_process(5, current_PCB);
+                sleep_process(20, current_PCB);
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
                 MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
                 MEM_READ(Z502DiskStatus, &disk_status);
             }
 
-            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-            MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
-
-            printf("Writing data to disk: %s\n", current_PCB->disk_data->buffer);
-
-            MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
-//            MEM_WRITE(Z502DiskSetBuffer, &(SystemCallData[2]) );
-            MEM_WRITE(Z502DiskSetBuffer, (INT32 *)(current_PCB->disk_data->buffer) );
-            temp = 1;
-            MEM_WRITE(Z502DiskSetAction, &(temp));  //set to write from disk
-            temp = 0;
-            disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
-            MEM_WRITE(Z502DiskStart, &(temp));
-
-            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-            MEM_READ(Z502DiskStatus, &disk_status);
-
-            if(disk_status == DEVICE_FREE) {
-                printf("Error!  Disk is free and should be in use\n");
-            }
-            else if(disk_status == ERR_BAD_DEVICE_ID) {
-                printf("Error!  Disk write was not set up correctly\n");
-            }
-            else {
-                current_PCB->state = SUSPEND;
-                current_PCB->suspend_reason = WAITING_FOR_DISK;
-
-                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
-            }
-
-            //disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+            disk_write(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
             break;
         case SYSNUM_DEFINE_SHARED_AREA:
             break;
@@ -750,7 +721,8 @@ void    osInit( int argc, char *argv[]  ) {
         //printf("Function: %s address1 : (%ld, %ld) address2: (%ld, %ld)\n", argv[1], &func, func, &test1a, test1a);
 
         if (func != NULL) {
-                test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, USER_MODE);
+                //test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, USER_MODE);
+                test_process = os_make_process(argv[1], DEFAULT_PRIORITY, &error_response, func, KERNEL_MODE);
                 switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
         }
         else {
@@ -1228,16 +1200,14 @@ void disk_write(long disk_id, long sector_id, char* write_buffer) {
         MEM_WRITE(Z502DiskStart, &disk_status);
         MEM_WRITE(Z502DiskSetID, &disk_id);
         MEM_READ(Z502DiskStatus, &disk_status);
+        disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
 
-        while (disk_status != DEVICE_FREE) {
-            MEM_READ(Z502DiskStatus, &disk_status);
-        }
+        current_PCB->state = SUSPEND;
+        current_PCB->suspend_reason = WAITING_FOR_DISK;
+        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
     }
     else if(disk_status == DEVICE_IN_USE) {
-        // add the current disk write info to the disk queue
-//        disk_queue[disk_id].disk_id = disk_id;
-//        disk_queue[disk_id].sector_id = sector_id;
-//        disk_queue[disk_id].buffer = write_buffer;
+        printf("Error, disk should not already be in use!\n");
     }
     else {
         printf("Catch All from disk_write! Should never get here!\n");

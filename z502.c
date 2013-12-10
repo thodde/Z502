@@ -904,8 +904,10 @@ void HardwareWriteDisk(INT16 disk_id, INT16 sector, char *buffer_ptr) {
                 &disk_state[disk_id].event_ptr);
     } else {
         GetSectorStructure(disk_id, sector, &sector_ptr, &local_error);
-        if (local_error != 0) /* No structure for this sector exists */
+
+        if (local_error != 0) {/* No structure for this sector exists */
             CreateSectorStruct(disk_id, sector, &sector_ptr);
+        }
 
         memcpy(sector_ptr, buffer_ptr, PGSIZE);
 
@@ -1991,6 +1993,7 @@ void GetSectorStructure(INT16 disk_id, INT16 sector, char **sector_ptr,
  *****************************************************************/
 
 void CreateSectorStruct(INT16 disk_id, INT16 sector, char **returned_sector_ptr) {
+//TAG!!! ERROR< this is throwing bad stuff
     SECTOR *ssp;
 
     ssp = (SECTOR *) malloc(sizeof(SECTOR));
