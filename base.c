@@ -235,7 +235,7 @@ void    fault_handler( void )
                 printf("Catch all!\n");
             }
 
-            //memory_printer();
+            memory_printer();
 
             break;
         default:
@@ -1070,7 +1070,7 @@ void memory_printer() {
             //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_MODIFIED_BIT)) +
             //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_REFERENCED_BIT));
 
-            MP_setup(Z502_PAGE_TBL_ADDR[i], current_PCB->pid, current_PCB->pagetable, state);
+            MP_setup(Z502_PAGE_TBL_ADDR[i], current_PCB->pid, current_PCB->pagetable, current_PCB->state);
         }
 
         MP_print_line();
