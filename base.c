@@ -46,9 +46,9 @@ PCB                *root_process_pcb = NULL;
 LinkedList         timer_queue;            // Holds all processes that are currently waiting for the timer queue
 LinkedList         process_list;           // Holds all processes that exist
 
-PCB**               disk_queue;             // Holds all processes trying to use the disk
-//PCB*               disk_queue[MAX_NUMBER_OF_DISKS];             // Holds all processes trying to use the disk
+PCB**              disk_queue;             // Holds all processes trying to use the disk
 FRAME*             frame_list;
+SHADOW_TABLE*     shadow_table;
 
 int                total_timer_pid = 0;    //counter for the number of PCBs in the timer queue
 INT32              last_context_switch = 0;  // the number of ticks since the last context switch
@@ -58,7 +58,7 @@ BOOL interrupt_lock = FALSE;
 
 // if these flags are set to 1, print out state information
 int print_schedule = 0;
-int print_memory = 1;
+int print_memory = 0;
 
 char *call_names[] = { "mem_read ", "mem_write",
                        "read_mod ", "get_time ", "sleep    ",
@@ -211,12 +211,19 @@ void    fault_handler( void )
 
                 // allocate the frame list
                 frame_list = (FRAME*) calloc(sizeof(FRAME), PHYS_MEM_PGS);
+                shadow_table = (SHADOW_TABLE*) calloc(sizeof(SHADOW_TABLE), PHYS_MEM_PGS);
 
                 // init the frame list
                 for(i = 0; i < (int) PHYS_MEM_PGS; i++) {
                     frame_list[i].frame_id = i;
                     frame_list[i].page_id = -1;
+                    frame_list[i].pid = current_PCB->pid;
                     frame_list[i].in_use = FALSE;
+
+                    shadow_table[i].frame_id = i;
+                    shadow_table[i].page_id = -1;
+                    shadow_table[i].disk_id = -1;
+                    shadow_table[i].in_use = FALSE;
                 }
             }
 
@@ -242,7 +249,7 @@ void    fault_handler( void )
                         // handles locking for the current thread on this chunk of memory
                         READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
                         if (lock_result == FALSE)
-                            printf("Error, could not obtain lock!!\n");
+                            printf("Could not obtain lock!!\n");
                     }
                 }
                 else if(!(Z502_PAGE_TBL_ADDR[status] & PTBL_VALID_BIT)) {
@@ -959,7 +966,7 @@ void sleep_process(INT32 sleep_time, PCB* sleeping_process) {
     sleeping_process->state = SLEEPING;
 
     INT32 ticks_till_wake = timer_queue->data->delay - current_time;
-    if (ticks_till_wake < 0)       //TODO I should validate this or throw an error if it is every < 0
+    if (ticks_till_wake < 0)       //TODO I should validate this or throw an error if it is ever < 0
         ticks_till_wake = 0;
 
     MEM_WRITE(Z502TimerStart, &timer_queue->data->delay);
@@ -1003,20 +1010,41 @@ func_ptr get_function_handle(char *name) {
         response = (void*) test1l;
     else if ( strcmp( name, "test1m" ) == 0 )
         response = (void*) test1m;
-    else if ( strcmp( name, "test2a" ) == 0 )
+    else if ( strcmp( name, "test2a" ) == 0 ) {
         response = (void*) test2a;
-    else if ( strcmp( name, "test2b" ) == 0 )
+        print_memory = 1;
+        print_schedule = 0;
+    }
+    else if ( strcmp( name, "test2b" ) == 0 ) {
         response = (void*) test2b;
-    else if ( strcmp( name, "test2c" ) == 0 )
+        print_memory = 1;
+        print_schedule = 0;
+    }
+    else if ( strcmp( name, "test2c" ) == 0 ) {
         response = (void*) test2c;
-    else if ( strcmp( name, "test2d" ) == 0 )
+        print_schedule = 1;
+        print_memory = 0;
+    }
+    else if ( strcmp( name, "test2d" ) == 0 ) {
         response = (void*) test2d;
-    else if ( strcmp( name, "test2e" ) == 0 )
+        print_schedule = 1;
+        print_memory = 0;
+    }
+    else if ( strcmp( name, "test2e" ) == 0 ) {
         response = (void*) test2e;
-    else if ( strcmp( name, "test2f" ) == 0 )
+        print_memory = 1;
+        print_schedule = 1;
+    }
+    else if ( strcmp( name, "test2f" ) == 0 ) {
         response = (void*) test2f;
-    else if ( strcmp( name, "test2g" ) == 0 )
+        print_schedule = 0;
+        print_memory = 1;
+    }
+    else if ( strcmp( name, "test2g" ) == 0 ) {
         response = (void*) test2g;
+        print_memory = 0;
+        print_schedule = 0;
+    }
     else if ( strcmp( name, "test2h" ) == 0 )
         response = (void*) test2h;
     else if ( strcmp( name, "test2cAlt") == 0)
@@ -1068,7 +1096,7 @@ void memory_printer() {
                         ((Z502_PAGE_TBL_ADDR[frame_list[i].page_id] & PTBL_MODIFIED_BIT) >> 13) +
                         ((Z502_PAGE_TBL_ADDR[frame_list[i].page_id] & PTBL_REFERENCED_BIT) >> 13);
 
-                MP_setup(frame_list[i].frame_id, frame_list[i].pid, frame_list[i].page_id, state);
+                MP_setup(frame_list[i].frame_id, current_PCB->pid, frame_list[i].page_id, state);
             }
         }
 
@@ -1206,9 +1234,18 @@ UINT16 page_replacement() {
     Z502_PAGE_TBL_ADDR[page_id] = PHYS_MEM_PGS;
     Z502_PAGE_TBL_ADDR[page_id] = (UINT16)Z502_PAGE_TBL_ADDR[page_id] & PTBL_PHYS_PG_NO;
 
+    // copy the old info into the shadow table
+    shadow_table[page_id].disk_id = disk_id;
+    shadow_table[page_id].sector_id = sector_id;
+    shadow_table[page_id].frame_id = frame_id;
+    shadow_table[page_id].page_id = page_id;
+    shadow_table[page_id].in_use = TRUE;
+
+    // write the contents of the buffer to the disk
     if(current_PCB->disk_data->buffer != NULL)
         disk_write(disk_id, sector_id, current_PCB->disk_data->buffer);
 
+    // free up the frame
     frame_list[victim].in_use = FALSE;
 
     return victim;

@@ -54,6 +54,14 @@ typedef struct {
 } FRAME;
 
 typedef struct {
+    INT32 page_id;
+    INT32 disk_id;
+    INT32 sector_id;
+    int frame_id;
+    BOOL in_use;
+} SHADOW_TABLE;
+
+typedef struct {
     INT16 disk_id;
     INT32 sector_id;
     INT32 buffer[PGSIZE];
