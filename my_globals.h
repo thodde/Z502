@@ -100,7 +100,7 @@ void unlock_read(void);
 void lock_suspend(void);
 void unlock_suspend(void);
 UINT16 find_empty_frame(INT32 status);
-UINT16 page_replacement(INT32 frame);
+UINT16 page_replacement();
 int get_disk_status(long disk_id);
 void disk_read(long disk_id, long sector_id, char* read_buffer);
 void disk_write(long disk_id, long sector_id, char* write_buffer);
