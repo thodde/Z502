@@ -178,6 +178,8 @@ void    fault_handler( void )
     INT32       Index = 0;
     INT32       frame = -1;
     INT32       lock_result;
+    int         out_of_frames = 0;
+    INT32       i;
 
     // Get cause of interrupt
     MEM_READ(Z502InterruptDevice, &device_id );
@@ -207,19 +209,31 @@ void    fault_handler( void )
 
                 // allocate the frame list
                 frame_list = (FRAME*) calloc(sizeof(FRAME), PHYS_MEM_PGS);
+
+                // init the frame list
+                for(i = 0; i < PHYS_MEM_PGS; i++) {
+                    frame_list[i].frame_id = i;
+                    frame_list[i].page_id = -1;
+                    frame_list[i].in_use = FALSE;
+                }
             }
 
             if(Z502_PAGE_TBL_ADDR[status] == NULL) {
                 // The user is requesting a page that has not yet been created
-                frame = find_empty_frame();
+                frame = find_empty_frame(status);
+
+                //make sure we are aware that we are out of memory
+                if(frame == PHYS_MEM_PGS) {
+                    out_of_frames = 1;
+                }
+
                 if(frame == -1) {
                     //TODO: FIX THIS LATER
                     Z502Halt();
                 }
                 else {
                     // make sure the frame is not previously used
-                    Z502_PAGE_TBL_ADDR[status] = PTBL_VALID_BIT | frame;
-                    BOOL retval = TRUE;
+                    Z502_PAGE_TBL_ADDR[status] = (UINT16) frame_list[frame].frame_id | PTBL_VALID_BIT;
 
                     // handles locking for the current thread on this chunk of memory
                     READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
@@ -233,6 +247,12 @@ void    fault_handler( void )
             }
             else {
                 printf("Catch all!\n");
+            }
+
+            // this means all the frames have been used
+            if(out_of_frames == 1) {
+                // the replacement algorithm can go here
+                page_replacement(frame);
             }
 
             memory_printer();
@@ -1070,7 +1090,7 @@ void memory_printer() {
             //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_MODIFIED_BIT)) +
             //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_REFERENCED_BIT));
 
-            MP_setup(Z502_PAGE_TBL_ADDR[i], current_PCB->pid, current_PCB->pagetable, current_PCB->state);
+            MP_setup(i, current_PCB->pid, current_PCB->pagetable[i], 0);
         }
 
         MP_print_line();
@@ -1171,7 +1191,7 @@ void clear_handled_broadcast_message() {
 /**********************************************************
 * All Memory management stuff is defined below here
 ***********************************************************/
-UINT16 find_empty_frame() {
+UINT16 find_empty_frame(INT32 status) {
     int i;
     INT32 lock_result;
 
@@ -1179,22 +1199,46 @@ UINT16 find_empty_frame() {
     for(i = 0; i < PHYS_MEM_PGS; i++) {
         if((frame_list[i]).in_use == FALSE) {
             frame_list[i].in_use = TRUE;
+            frame_list[i].pid = current_PCB->pid;
+            frame_list[i].page_id = status;
             return i;
         }
     }
 
-    //no empty frames find an unused one and release it
-    //for now, arbitrarily take frame 0
-
-    // write to disk
-    //frame_list[0].in_use = FALSE;
-    // free memory
-    // clear frame list
-
-    // READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
-
     // if no frames are found by now, return -1
     return -1;
+}
+
+/**
+* no empty frames find an unused one and release it
+* for now, arbitrarily take frame 0
+*/
+UINT16 page_replacement(INT32 frame) {
+    long disk_id;
+    long sector_id;
+    long frame_id;
+    long page_id;
+    int  victim = 0;
+    frame = 0;
+
+    page_id = frame_list[frame].page_id;
+    frame_id = frame_list[frame].frame_id;
+
+    disk_id = current_PCB->pid + 1;
+    sector_id = page_id;
+
+    Z502_PAGE_TBL_ADDR[page_id] = PHYS_MEM_PGS;
+    Z502_PAGE_TBL_ADDR[page_id] = (UINT16)Z502_PAGE_TBL_ADDR[page_id] & PTBL_PHYS_PG_NO;
+
+    if(current_PCB->disk_data->buffer != NULL)
+        disk_write(disk_id, sector_id, current_PCB->disk_data->buffer);
+
+    frame_list[frame].in_use = FALSE;
+    //free(frame_list[frame]);
+
+    return frame;
+
+    // READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
 }
 
 // Just a wrapper for reading the disk status
