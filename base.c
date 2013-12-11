@@ -58,7 +58,7 @@ BOOL interrupt_lock = FALSE;
 
 // if these flags are set to 1, print out state information
 int print_schedule = 0;
-int print_memory = 0;
+int print_memory = 1;
 
 char *call_names[] = { "mem_read ", "mem_write",
                        "read_mod ", "get_time ", "sleep    ",
@@ -263,6 +263,11 @@ void    fault_handler( void )
                 frame_list[new_frame].page_id = status;
                 frame_list[new_frame].pid = current_PCB->pid;
                 frame_list[new_frame].in_use = TRUE;
+
+                // handles locking for the current thread on this chunk of memory
+                READ_MODIFY(MEMORY_INTERLOCK_BASE + new_frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
+                if (lock_result == FALSE)
+                    printf("Error, could not obtain lock!!\n");
             }
 
             memory_printer();
@@ -644,48 +649,10 @@ void    svc( SYSTEM_CALL_DATA *SystemCallData ) {
             current_PCB->disk_data->sector_id = SystemCallData->Argument[1];
             current_PCB->disk_data->disk_operation = DISK_READ;
 
-            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-            MEM_READ(Z502DiskStatus, &disk_status);
+            disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
 
-            while (!(disk_status == DEVICE_FREE)) { //sleep till free
-                sleep_process(20, current_PCB);
-                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
-                MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-                MEM_READ(Z502DiskStatus, &disk_status);
-            }
-
-            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-            MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
-
-            MEM_WRITE(Z502DiskSetBuffer, (INT16 *)(current_PCB->disk_data->buffer));
-
-            disk_action = 0;
-            MEM_WRITE(Z502DiskSetAction, &(disk_action));  //set to read from disk
-            disk_start = 0;
-            disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
-            MEM_WRITE(Z502DiskStart, &(disk_start));
-
-            MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
-            MEM_READ(Z502DiskStatus, &disk_status);
-
-            if(disk_status == DEVICE_FREE) {
-                printf("Error!  Disk is free and should be in use\n");
-            }
-            else if(disk_status == ERR_BAD_DEVICE_ID) {
-                printf("Error!  Disk write was not set up correctly\n");
-            }
-            else {
-                // suspend the process for the duration of the read
-                current_PCB->state = SUSPEND;
-                current_PCB->suspend_reason = WAITING_FOR_DISK;
-
-                // switch to the root process so we keep running while the other process is reading
-                switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
-
-                memcpy(SystemCallData->Argument[2], current_PCB->disk_data->buffer, PGSIZE);
-                memset(current_PCB->disk_data->buffer, '\0', PGSIZE);
-            }
-            //disk_read(SystemCallData->Argument[0], SystemCallData->Argument[1], SystemCallData->Argument[2]);
+            memcpy(SystemCallData->Argument[2], current_PCB->disk_data->buffer, PGSIZE);
+            memset(current_PCB->disk_data->buffer, '\0', PGSIZE);
 
             break;
 
@@ -1096,11 +1063,13 @@ void memory_printer() {
     // makes sure we aren't printing out memory stuff if it is not needed
     if(print_memory == 1) {
         for(i = 0; i <= PHYS_MEM_PGS; i++) {
-            //state = ((Z502_PAGE_TBL_ADDR[i] & PTBL_VALID_BIT)) +
-            //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_MODIFIED_BIT)) +
-            //        ((Z502_PAGE_TBL_ADDR[i] & PTBL_REFERENCED_BIT));
+            if(frame_list[i].page_id >= 0 && frame_list[i].page_id < VIRTUAL_MEM_PGS) {
+                state = ((Z502_PAGE_TBL_ADDR[frame_list[i].page_id] & PTBL_VALID_BIT) >> 13) +
+                        ((Z502_PAGE_TBL_ADDR[frame_list[i].page_id] & PTBL_MODIFIED_BIT) >> 13) +
+                        ((Z502_PAGE_TBL_ADDR[frame_list[i].page_id] & PTBL_REFERENCED_BIT) >> 13);
 
-            MP_setup(i, current_PCB->pid, current_PCB->pagetable[i], 0);
+                MP_setup(frame_list[i].frame_id, frame_list[i].pid, frame_list[i].page_id, state);
+            }
         }
 
         MP_print_line();
@@ -1243,8 +1212,6 @@ UINT16 page_replacement() {
     frame_list[victim].in_use = FALSE;
 
     return victim;
-
-    // READ_MODIFY(MEMORY_INTERLOCK_BASE + frame, DO_LOCK, DO_NOT_SUSPEND, &lock_result);
 }
 
 // Just a wrapper for reading the disk status
@@ -1260,45 +1227,47 @@ int get_disk_status(long disk_id) {
 * This function is responsible for reading data from the disk.
 */
 void disk_read(long disk_id, long sector_id, char* read_buffer) {
-    INT32 disk_status;
-    MEM_WRITE(Z502DiskSetID, &disk_id);
+    INT32               disk_status;
+    INT32               disk_action;
+    INT32               disk_start;
+
+    MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
     MEM_READ(Z502DiskStatus, &disk_status);
 
-    // Make sure the device is free
-    if (disk_status == DEVICE_FREE) {
-        MEM_WRITE(Z502DiskSetSector, &sector_id);
-        MEM_WRITE(Z502DiskSetBuffer, (INT32*) read_buffer);
-
-        // let the disk know we are going to be reading
-        disk_status = 0;
-        MEM_WRITE(Z502DiskSetAction, &disk_status);
-        disk_status = 0;
-
-        MEM_WRITE(Z502DiskStart, &disk_status);
-        MEM_WRITE(Z502DiskSetID, &disk_id);
+    while (!(disk_status == DEVICE_FREE)) { //sleep till free
+        sleep_process(20, current_PCB);
+        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
+        MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
         MEM_READ(Z502DiskStatus, &disk_status);
-
-        // Read what we need to read
-        while (disk_status != DEVICE_FREE) {
-            MEM_READ(Z502DiskStatus, &disk_status);
-        }
-
-        // tell the process that it is ok to run once again
-        current_PCB->state = READY;
-        //Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
     }
-    else if(disk_status == DEVICE_IN_USE) {
-        // if the disk is in use, switch the current process back to READY
-        // because the process will not be able to write yet.
 
-//        disk_queue[disk_id].disk_id = disk_id;
-//        disk_queue[disk_id].sector_id = sector_id;
-//        disk_queue[disk_id].buffer = read_buffer;
-        current_PCB->state = READY;
-        //Z502SwitchContext( SWITCH_CONTEXT_SAVE_MODE, &(current_PCB->context) );
+    MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
+    MEM_WRITE(Z502DiskSetSector, &(current_PCB->disk_data->sector_id));
+
+    MEM_WRITE(Z502DiskSetBuffer, (INT16 *)(current_PCB->disk_data->buffer));
+
+    disk_action = 0;
+    MEM_WRITE(Z502DiskSetAction, &(disk_action));  //set to read from disk
+    disk_start = 0;
+    disk_queue[(INT32)current_PCB->disk_data->disk_id] = current_PCB;
+    MEM_WRITE(Z502DiskStart, &(disk_start));
+
+    MEM_WRITE(Z502DiskSetID, &(current_PCB->disk_data->disk_id));
+    MEM_READ(Z502DiskStatus, &disk_status);
+
+    if(disk_status == DEVICE_FREE) {
+        printf("Error!  Disk is free and should be in use\n");
+    }
+    else if(disk_status == ERR_BAD_DEVICE_ID) {
+        printf("Error!  Disk write was not set up correctly\n");
     }
     else {
-        printf("Catch All from disk_read! Should never get here!\n");
+        // suspend the process for the duration of the read
+        current_PCB->state = SUSPEND;
+        current_PCB->suspend_reason = WAITING_FOR_DISK;
+
+        // switch to the root process so we keep running while the other process is reading
+        switch_context(root_process_pcb, SWITCH_CONTEXT_SAVE_MODE);
     }
 }
 
